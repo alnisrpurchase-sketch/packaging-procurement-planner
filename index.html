@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Al Nisr Packaging Procurement Planner</title>
+<title>Packaging Procurement Planner</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -14,7 +14,8 @@ body{margin:0;background:#f1f3f4;color:#202124}
 header{background:#5b3a1e;color:#fff;padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 header h1{font-size:18px;margin:0;flex:1}
 #cloudState{font-size:12px;background:rgba(255,255,255,.15);padding:4px 10px;border-radius:12px}
-nav button{background:#7a512b;color:#fff;border:none;padding:8px 12px;margin-left:5px;border-radius:5px;cursor:pointer;font-size:12.5px}
+nav{display:flex;flex-wrap:wrap;gap:4px}
+nav button{background:#7a512b;color:#fff;border:none;padding:8px 12px;border-radius:5px;cursor:pointer;font-size:12.5px}
 nav button.active{background:var(--amber)}
 main{padding:16px;max-width:1250px;margin:auto}
 .cards{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
@@ -51,10 +52,43 @@ tr.sub td{background:#fffbe6!important}
 .opt.none{color:#80868b;cursor:default}
 .comboWrap.slim{min-width:220px}
 .repBtns button{margin:4px}
+
+/* ============ RESPONSIVE: tables become stacked cards below 1100px ============ */
+@media(max-width:1100px){
+  main{padding:10px;max-width:100%}
+  header{padding:10px}
+  header h1{font-size:15px;flex-basis:100%}
+  .cards{gap:8px}
+  .card{min-width:calc(50% - 8px);padding:10px}
+  .card h2{font-size:20px}
+  form,.panel{padding:10px}
+  input,select{max-width:100%}
+  .comboWrap{width:100%;min-width:0;margin:4px 0}
+  .tblWrap{overflow:visible}
+  table,tbody{display:block;width:100%;background:transparent;box-shadow:none}
+  thead{display:none}
+  tr{display:block;background:#fff;margin:0 0 10px;border-radius:8px;padding:6px 8px;box-shadow:0 1px 3px rgba(0,0,0,.14)}
+  tr.sub{background:#fffbe6}
+  td{display:flex;justify-content:space-between;align-items:center;gap:10px;white-space:normal;
+     border:none;border-bottom:1px dashed #eee;padding:6px 4px;font-size:13px;text-align:right}
+  td[data-l]::before{content:attr(data-l);font-weight:700;color:#7a512b;text-align:left;flex-shrink:0;max-width:46%}
+  td:empty{display:none}
+  td.act{flex-wrap:wrap;justify-content:flex-end}
+  td.act button{margin:2px}
+  td .comboWrap{flex:1;min-width:0}
+  [contenteditable]{min-width:0}
+  tr.rowRed td:first-child{box-shadow:none;border-left:5px solid var(--red);border-radius:6px 0 0 6px}
+  .repBtns button{margin:2px}
+}
+@media(max-width:480px){
+  .card{min-width:100%}
+  td{font-size:12.5px}
+  button{padding:6px 10px;font-size:12.5px}
+}
 </style>
 </head>
 <body>
-<header><h1>📦 Al Nisr Packaging Procurement Planner</h1><span id="cloudState">💾 Local mode</span><nav id="nav"></nav></header>
+<header><h1>📦 Packaging Procurement Planner</h1><span id="cloudState">💾 Local mode</span><nav id="nav"></nav></header>
 <main>
 <div id="alerts"></div>
 
@@ -193,9 +227,7 @@ tr.sub td{background:#fffbe6!important}
 
 <script>
 'use strict';
-/* ================================================================
-   FIREBASE CONFIG — ✅ YOUR PROJECT (packaging-planner) IS CONNECTED
-================================================================ */
+/* FIREBASE — your project connected */
 const FB_CONFIG={
   apiKey:"AIzaSyCqQBF42PeFATPfzWoRPTteyFUeW_8Ize4",
   authDomain:"packaging-planner.firebaseapp.com",
@@ -322,10 +354,11 @@ function supDel(i){if(db.pos.some(p=>p.sup===db.sups[i].name&&p.status!=='recd')
     return alert('Supplier has open/ready POs first.');
   if(confirm('Delete supplier "'+db.sups[i].name+'"?')){db.sups.splice(i,1);save();renderSups();render();}}
 function renderSups(){
-  $('supTbl').innerHTML='<tr><th>Supplier</th><th>Phone</th><th>Open/Ready POs</th><th colspan="2">Action</th></tr>'+
+  $('supTbl').innerHTML='<thead><tr><th>Supplier</th><th>Phone</th><th>Open/Ready POs</th><th colspan="2">Action</th></tr></thead>'+
    (db.sups.map((s,i)=>{const n=db.pos.filter(p=>p.sup===s.name&&p.status!=='recd').length;
-     return '<tr><td>'+esc(s.name)+'</td><td>'+esc(s.phone||'-')+'</td><td>'+(n||'-')+'</td>'+
-     '<td><button onclick="supRename('+i+')">✏️</button></td><td><button class="danger" onclick="supDel('+i+')">🗑</button></td></tr>';}).join('')
+     return '<tr><td data-l="Supplier">'+esc(s.name)+'</td><td data-l="Phone">'+esc(s.phone||'-')+'</td>'+
+     '<td data-l="Open/Ready POs">'+(n||'-')+'</td>'+
+     '<td colspan="2" class="act" data-l="Action"><button onclick="supRename('+i+')">✏️</button><button class="danger" onclick="supDel('+i+')">🗑</button></td></tr>';}).join('')
    ||'<tr><td colspan="5">No suppliers yet</td></tr>');}
 
 /* ============ ITEMS ============ */
@@ -426,14 +459,14 @@ function renderBOM(){const fg=bomPickFgSel();
   if(!fg){$('bomEditor').innerHTML='<small class="note">Type an FG code above or create new.</small>';return;}
   const b=db.boms[fg];
   $('bomEditor').innerHTML='<small class="note"><b>'+esc(fg)+'</b> — '+esc(b.name)+' (quantities per 1 '+esc(b.uom)+')</small>'+
-   '<table><tr><th>Component (type to search)</th><th>Qty per 1 '+esc(b.uom)+'</th><th>Count?</th><th></th></tr>'+
+   '<table><thead><tr><th>Component (type to search)</th><th>Qty per 1 '+esc(b.uom)+'</th><th>Count?</th><th></th></tr></thead>'+
    b.comps.map((c,i)=>{const it=item(c.itemCode);
-     return '<tr'+(c.excl?' class="sub"':'')+'><td><div class="comboWrap slim">'+
+     return '<tr'+(c.excl?' class="sub"':'')+'><td data-l="Component"><div class="comboWrap slim">'+
       '<input class="cbitem" data-i="'+i+'" value="'+esc(c.itemCode)+'" placeholder="type code / name…" autocomplete="off">'+
-      '<div class="opts"></div></div>'+(it?'<small class="note">'+esc(it.name)+'</small>':'')+'</td>'+
-      '<td><input type="number" step="any" min="0" value="'+c.qty+'" oninput="upComp(\''+fg+'\','+i+',\'qty\',this.value)" style="width:80px"></td>'+
-      '<td><input type="checkbox" '+(c.excl?'':'checked')+' onchange="upComp(\''+fg+'\','+i+',\'excl\',this.checked)"> '+(c.excl?'excluded (liquid)':'packing')+'</td>'+
-      '<td><button class="danger" onclick="rmComp(\''+fg+'\','+i+')">✖</button></td></tr>';}).join('')+
+      '<div class="opts"></div></div>'+(it?' <small class="note">'+esc(it.name)+'</small>':'')+'</td>'+
+      '<td data-l="Qty per 1 '+esc(b.uom)+'"><input type="number" step="any" min="0" value="'+c.qty+'" oninput="upComp(\''+fg+'\','+i+',\'qty\',this.value)" style="width:80px"></td>'+
+      '<td data-l="Count"><label><input type="checkbox" '+(c.excl?'':'checked')+' onchange="upComp(\''+fg+'\','+i+',\'excl\',this.checked)"> '+(c.excl?'excluded (liquid)':'packing')+'</label></td>'+
+      '<td class="act"><button class="danger" onclick="rmComp(\''+fg+'\','+i+')">✖</button></td></tr>';}).join('')+
    '</table><button type="button" onclick="addComp()">＋ Component</button>';
   bindBomCombos();}
 
@@ -650,8 +683,8 @@ const REPORTS=[
 function showReport(k){const r=REPORTS.find(x=>x[0]===k);if(!r)return;
   curRep=r[2]();curRep.file+='_'+today()+'.csv';
   $('repTitle').textContent=r[1];
-  $('repPrev').innerHTML='<tr>'+curRep.head.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr>'+
-    (curRep.rows.length?curRep.rows.map(row=>'<tr>'+row.map(c=>'<td>'+esc(c)+'</td>').join('')+'</tr>').join('')
+  $('repPrev').innerHTML='<thead><tr>'+curRep.head.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead>'+
+    (curRep.rows.length?curRep.rows.map(row=>'<tr>'+row.map((c,ci)=>'<td data-l="'+esc(curRep.head[ci])+'">'+esc(c)+'</td>').join('')+'</tr>').join('')
      :'<tr><td colspan="'+curRep.head.length+'">No data</td></tr>');
   $('repArea').classList.remove('hide');
   [...document.querySelectorAll('#repBtns button')].forEach(b=>b.classList.toggle('blue',b.dataset.k===k));}
@@ -691,33 +724,38 @@ function render(){const C=calc();const{committed,committedBy,onOrder,readyQ,fgC,
 
   let sr='';
   db.items.forEach(i=>{const cm=committedFor(i,C);
-    if(cm>i.onHand)sr+='<tr class="rowRed"><td>'+esc(i.code)+'</td><td>'+esc(i.name)+'</td><td>'+f(i.onHand)+
-      '</td><td class="red">'+f(cm)+'</td><td class="red">'+f(i.onHand-cm)+'</td><td>'+
+    if(cm>i.onHand)sr+='<tr class="rowRed"><td data-l="Code">'+esc(i.code)+'</td><td data-l="Item">'+esc(i.name)+'</td>'+
+      '<td data-l="Actual">'+f(i.onHand)+'</td><td data-l="Committed" class="red">'+f(cm)+'</td>'+
+      '<td data-l="After Cmt." class="red">'+f(i.onHand-cm)+'</td><td data-l="With Supplier">'+
       ((onOrder[i.code]||readyQ[i.code])?
         (onOrder[i.code]?f(onOrder[i.code])+' ordered':'')+(onOrder[i.code]&&readyQ[i.code]?' + ':'')+(readyQ[i.code]?f(readyQ[i.code])+' ready ✔':'')
         :'❌ none — RAISE PO')+'</td></tr>';});
-  $('shortTbl').innerHTML='<tr><th>Code</th><th>Item / FG</th><th>Actual</th><th>Committed</th><th>After Commitment</th><th>With Supplier</th></tr>'+
+  $('shortTbl').innerHTML='<thead><tr><th>Code</th><th>Item / FG</th><th>Actual</th><th>Committed</th><th>After Commitment</th><th>With Supplier</th></tr></thead>'+
     (sr||'<tr><td colspan="6">🎉 Nothing short</td></tr>');
 
   let sg='';
   db.items.forEach(i=>{const cm=committedFor(i,C);
     const gap=(cm+i.min)-i.onHand-((onOrder[i.code]||0)+(readyQ[i.code]||0));
-    if(gap>0)sg+='<tr><td>'+esc(i.code)+'</td><td>'+esc(i.name)+'</td><td>Order <b style="color:var(--red)">'+f(Math.ceil(gap))+' '+esc(i.unit)+'</b></td>'+
-      '<td><button onclick="quickPO(\''+esc(i.code)+'\')">📝 Create PO</button></td></tr>';});
-  $('suggestTbl').innerHTML='<tr><th>Code</th><th>Item</th><th>Suggested Qty</th><th>Action</th></tr>'+
+    if(gap>0)sg+='<tr><td data-l="Code">'+esc(i.code)+'</td><td data-l="Item">'+esc(i.name)+'</td>'+
+      '<td data-l="Suggested">Order <b style="color:var(--red)">'+f(Math.ceil(gap))+' '+esc(i.unit)+'</b></td>'+
+      '<td class="act" data-l="Action"><button onclick="quickPO(\''+esc(i.code)+'\')">📝 Create PO</button></td></tr>';});
+  $('suggestTbl').innerHTML='<thead><tr><th>Code</th><th>Item</th><th>Suggested Qty</th><th>Action</th></tr></thead>'+
     (sg||'<tr><td colspan="4">✅ No purchases needed</td></tr>');
 
-  let st='<tr><th>Code</th><th>Item</th><th>Type</th><th>Unit</th><th>Actual Qty</th><th>Committed Qty</th><th>After Commitment</th><th>On Order (PO)</th><th>Ready at Sup.</th><th>Min</th><th>Status</th><th>🔍</th><th></th></tr>';
+  let st='<thead><tr><th>Code</th><th>Item</th><th>Type</th><th>Unit</th><th>Actual Qty</th><th>Committed Qty</th><th>After Commitment</th><th>On Order (PO)</th><th>Ready at Sup.</th><th>Min</th><th>Status</th><th colspan="2">Action</th></tr></thead>';
   db.items.forEach(i=>{const cm=committedFor(i,C),fr=+(i.onHand-cm).toFixed(2);
     const stat=fr<0?badge('b-red','SHORTAGE'):fr<i.min?badge('b-amb','LOW'):badge('b-grn','OK');
-    st+='<tr class="'+(fr<0?'rowRed':'')+'"><td>'+(isFG(i.code)?'🏭 ':'')+esc(i.code)+'</td><td>'+esc(i.name)+'</td><td>'+esc(i.cat)+'</td><td>'+esc(i.unit)+'</td>'+
-      '<td contenteditable onblur="editNum(\''+esc(i.code)+'\',\'onHand\',this.textContent)"><b>'+f(i.onHand)+'</b></td>'+
-      '<td><b>'+f(cm)+'</b></td><td class="'+(fr<0?'red':'')+'"><b>'+f(fr)+'</b></td>'+
-      '<td>'+(onOrder[i.code]?f(onOrder[i.code]):'-')+'</td>'+
-      '<td>'+(readyQ[i.code]?'<b style="color:var(--blue)">'+f(readyQ[i.code])+'</b>':'-')+'</td>'+
-      '<td contenteditable onblur="editNum(\''+esc(i.code)+'\',\'min\',this.textContent)">'+f(i.min)+'</td>'+
-      '<td>'+stat+'</td><td><button onclick="toggleDetail(\''+esc(i.code)+'\')">🔍</button></td>'+
-      '<td><button class="danger" onclick="delItem(\''+esc(i.code)+'\')">🗑</button></td></tr>';
+    st+='<tr class="'+(fr<0?'rowRed':'')+'"><td data-l="Code">'+(isFG(i.code)?'🏭 ':'')+esc(i.code)+'</td>'+
+      '<td data-l="Item">'+esc(i.name)+'</td><td data-l="Type">'+esc(i.cat)+'</td><td data-l="Unit">'+esc(i.unit)+'</td>'+
+      '<td data-l="Actual Qty" contenteditable onblur="editNum(\''+esc(i.code)+'\',\'onHand\',this.textContent)"><b>'+f(i.onHand)+'</b></td>'+
+      '<td data-l="Committed"><b>'+f(cm)+'</b></td>'+
+      '<td data-l="After Cmt." class="'+(fr<0?'red':'')+'"><b>'+f(fr)+'</b></td>'+
+      '<td data-l="On Order (PO)">'+(onOrder[i.code]?f(onOrder[i.code]):'-')+'</td>'+
+      '<td data-l="Ready at Sup.">'+(readyQ[i.code]?'<b style="color:var(--blue)">'+f(readyQ[i.code])+'</b>':'-')+'</td>'+
+      '<td data-l="Min" contenteditable onblur="editNum(\''+esc(i.code)+'\',\'min\',this.textContent)">'+f(i.min)+'</td>'+
+      '<td data-l="Status">'+stat+'</td>'+
+      '<td colspan="2" class="act" data-l="Action"><button onclick="toggleDetail(\''+esc(i.code)+'\')">🔍</button>'+
+      '<button class="danger" onclick="delItem(\''+esc(i.code)+'\')">🗑</button></td></tr>';
     if(expanded===i.code){
       const pl=committedBy[i.code],fl=fgBy[i.code];
       let txt='';
@@ -726,49 +764,57 @@ function render(){const C=calc();const{committed,committedBy,onOrder,readyQ,fgC,
       st+='<tr class="sub"><td colspan="13">'+(txt||'🔓 No commitment')+'</td></tr>';}});
   $('stockTbl').innerHTML=st;
 
-  let sh='<tr><th>SO ID</th><th>FG Code</th><th>Description</th><th>Qty</th><th>Due</th><th>Use FG (optional)</th><th>Status</th><th colspan="2">Action</th></tr>';
+  let sh='<thead><tr><th>SO ID</th><th>FG Code</th><th>Description</th><th>Qty</th><th>Due</th><th>Use FG (optional)</th><th>Status</th><th colspan="2">Action</th></tr></thead>';
   rows.forEach((r,ri)=>{const l=r.l,dl=dLeft(l.date),bu=(db.boms[l.code]||{}).uom||'CTN',fgit=item(l.code);
     const stat=r.noBom?badge('b-gry','NO BOM'):r.short?badge('b-red','MATERIAL SHORT'):badge('b-grn','READY TO PACK');
-    sh+='<tr'+(r.short?' class="rowRed"':'')+'><td><b>'+esc(l.soId)+'</b></td><td>'+esc(l.code)+'</td>'+
-      '<td>'+esc((db.boms[l.code]||{}).name||l.name||'')+'</td><td>'+f(l.qty)+' '+esc(bu)+'</td>'+
-      '<td>'+l.date+(dl<0?' '+badge('b-red','LATE '+(-dl)+'d'):dl<=3?' '+badge('b-amb',dl+'d left'):'')+'</td>'+
-      '<td>'+(fgit?'<input id="fgi'+ri+'" type="number" min="0" max="'+l.qty+'" step="any" value="'+(r.fu||0)+'" style="width:70px" title="FG in hand: '+f(fgit.onHand)+'">'+
-        '<button onclick="setFG('+ri+')">✔</button> <small class="note">avail '+f(fgit.onHand)+'</small>':'-')+'</td>'+
-      '<td>'+stat+(r.fu>0?' '+badge('b-blu',f(r.fu)+' from FG'):'')+'</td>'+
-      '<td><button class="ok" onclick="completeSO(\''+esc(l.key)+'\')">✅ Completed</button></td>'+
-      '<td><button class="danger" onclick="delSO(\''+esc(l.key)+'\')">✖</button></td></tr>';
+    sh+='<tr'+(r.short?' class="rowRed"':'')+'><td data-l="SO ID"><b>'+esc(l.soId)+'</b></td>'+
+      '<td data-l="FG Code">'+esc(l.code)+'</td>'+
+      '<td data-l="Description">'+esc((db.boms[l.code]||{}).name||l.name||'')+'</td>'+
+      '<td data-l="Qty">'+f(l.qty)+' '+esc(bu)+'</td>'+
+      '<td data-l="Due">'+l.date+(dl<0?' '+badge('b-red','LATE '+(-dl)+'d'):dl<=3?' '+badge('b-amb',dl+'d left'):'')+'</td>'+
+      '<td data-l="Use FG (avail '+f(fgit?fgit.onHand:0)+')">'+(fgit?'<input id="fgi'+ri+'" type="number" min="0" max="'+l.qty+'" step="any" value="'+(r.fu||0)+'" style="width:70px">'+
+        '<button onclick="setFG('+ri+')">✔</button>':'-')+'</td>'+
+      '<td data-l="Status">'+stat+(r.fu>0?' '+badge('b-blu',f(r.fu)+' from FG'):'')+'</td>'+
+      '<td colspan="2" class="act" data-l="Action">'+
+      '<button class="ok" onclick="completeSO(\''+esc(l.key)+'\')">✅ Completed</button>'+
+      '<button class="danger" onclick="delSO(\''+esc(l.key)+'\')">✖ Cancel</button></td></tr>';
     if(r.fu>0)sh+='<tr class="sub"><td colspan="9">🏭 '+f(r.fu)+' CTN delivered from ready FG stock — packaging committed only for remaining '+f(r.eff)+' CTN</td></tr>';
-    r.comps.forEach(c=>{sh+='<tr class="sub"><td colspan="4" style="padding-left:28px">'+(c.short>0?'🔴':'&nbsp;&nbsp;')+' '+esc(c.itemCode)+' · '+esc(c.name)+'</td>'+
-      '<td colspan="5">Req: <b>'+f(r.eff)+' '+esc(bu)+' × '+f(c.qty)+' = '+f(c.req)+'</b> '+esc(c.unit)+
+    r.comps.forEach(c=>{sh+='<tr class="sub"><td colspan="4" data-l="Component">'+(c.short>0?'🔴 ':'')+esc(c.itemCode)+' · '+esc(c.name)+'</td>'+
+      '<td colspan="5" data-l="Requirement">Req: <b>'+f(r.eff)+' '+esc(bu)+' × '+f(c.qty)+' = '+f(c.req)+'</b> '+esc(c.unit)+
       ' · Have: <b>'+f(c.got)+'</b>'+
       (c.short>0?' <b class="red">⚠ SHORT '+f(c.short)+' → ORDER NOW</b>':' ✓')+'</td></tr>';});});
   $('soTbl').innerHTML=sh||'<tr><td colspan="9">No open orders — upload Sales Order Excel</td></tr>';
 
-  let ph='<tr><th>PO</th><th>Supplier</th><th>Item</th><th>Qty</th><th>Expected (click to edit)</th><th>Status</th><th colspan="3">Action</th></tr>';
+  let ph='<thead><tr><th>PO</th><th>Supplier</th><th>Item</th><th>Qty</th><th>Expected (click to edit)</th><th>Status</th><th colspan="3">Action</th></tr></thead>';
   db.pos.forEach(p=>{const it=item(p.itemCode),dl=dLeft(p.exp);
     const stat=p.status==='open'?(dl<0?badge('b-red','OVERDUE '+(-dl)+'d'):dl<=3?badge('b-amb','due '+dl+'d'):badge('b-gry',dl+'d left'))
       :p.status==='ready'?badge('b-blu','🏭 READY WITH SUPPLIER'):badge('b-gry','received ✔');
-    ph+='<tr'+((p.status!=='recd'&&dl<0)?' class="rowRed"':'')+'><td><b>'+p.id+'</b></td><td>'+esc(p.sup)+'</td>'+
-      '<td>'+esc(p.itemCode)+' · '+(it?esc(it.name):'?')+'</td><td>'+f(p.qty)+'</td>'+
-      '<td><span contenteditable onblur="editPODate(\''+p.id+'\',this.textContent.trim())">'+p.exp+'</span></td>'+
-      '<td>'+stat+'</td>'+
+    ph+='<tr'+((p.status!=='recd'&&dl<0)?' class="rowRed"':'')+'><td data-l="PO"><b>'+p.id+'</b></td>'+
+      '<td data-l="Supplier">'+esc(p.sup)+'</td>'+
+      '<td data-l="Item">'+esc(p.itemCode)+' · '+(it?esc(it.name):'?')+'</td>'+
+      '<td data-l="Qty">'+f(p.qty)+'</td>'+
+      '<td data-l="Expected"><span contenteditable onblur="editPODate(\''+p.id+'\',this.textContent.trim())">'+p.exp+'</span></td>'+
+      '<td data-l="Status">'+stat+'</td>'+
+      '<td colspan="3" class="act" data-l="Action">'+
       (p.status==='open'
-        ?'<td><button class="blu" onclick="poReady(\''+p.id+'\')">🏭 Ready w/ Supplier</button></td>'+
-         '<td><button class="ok" onclick="receivePO(\''+p.id+'\')">📥 Received</button></td>'+
-         '<td><button class="danger" onclick="cancelPO(\''+p.id+'\')">✖</button></td>'
+        ?'<button class="blu" onclick="poReady(\''+p.id+'\')">🏭 Ready w/ Supplier</button>'+
+         '<button class="ok" onclick="receivePO(\''+p.id+'\')">📥 Received</button>'+
+         '<button class="danger" onclick="cancelPO(\''+p.id+'\')">✖</button>'
         :p.status==='ready'
-        ?'<td><button class="ok" onclick="receivePO(\''+p.id+'\')">📥 Received</button></td>'+
-         '<td><button onclick="poReopen(\''+p.id+'\')">↩ Back to Ordered</button></td>'+
-         '<td><button class="danger" onclick="cancelPO(\''+p.id+'\')">✖</button></td>'
-        :'<td colspan="3"></td>')+'</tr>';});
+        ?'<button class="ok" onclick="receivePO(\''+p.id+'\')">📥 Received</button>'+
+         '<button onclick="poReopen(\''+p.id+'\')">↩ Back to Ordered</button>'+
+         '<button class="danger" onclick="cancelPO(\''+p.id+'\')">✖</button>'
+        :'')+'</td></tr>';});
   $('poTbl').innerHTML=ph||'<tr><td colspan="9">No POs yet</td></tr>';
 
-  $('doneTbl').innerHTML='<tr><th>SO ID</th><th>FG Code</th><th>Qty</th><th>From FG</th><th>Date</th></tr>'+
+  $('doneTbl').innerHTML='<thead><tr><th>SO ID</th><th>FG Code</th><th>Qty</th><th>From FG</th><th>Date</th></tr></thead>'+
     (db.sos.filter(s=>s.status==='done').sort((a,b)=>b.doneTs-a.doneTs)
-     .map(s=>'<tr><td>'+esc(s.soId)+'</td><td>'+esc(s.code)+'</td><td>'+f(s.qty)+'</td><td>'+f(s.fgUsed||0)+'</td><td>'+new Date(s.doneTs).toLocaleDateString()+'</td></tr>').join('')
+     .map(s=>'<tr><td data-l="SO ID">'+esc(s.soId)+'</td><td data-l="FG Code">'+esc(s.code)+'</td>'+
+      '<td data-l="Qty">'+f(s.qty)+'</td><td data-l="From FG">'+f(s.fgUsed||0)+'</td>'+
+      '<td data-l="Date">'+new Date(s.doneTs).toLocaleDateString()+'</td></tr>').join('')
      ||'<tr><td colspan="5">None yet</td></tr>');
-  $('logTbl').innerHTML='<tr><th>When</th><th>Event</th></tr>'+
-    db.log.slice(0,80).map(l=>'<tr><td>'+new Date(l.ts).toLocaleString()+'</td><td>'+esc(l.txt)+'</td></tr>').join('');
+  $('logTbl').innerHTML='<thead><tr><th>When</th><th>Event</th></tr></thead>'+
+    db.log.slice(0,80).map(l=>'<tr><td data-l="When">'+new Date(l.ts).toLocaleString()+'</td><td data-l="Event">'+esc(l.txt)+'</td></tr>').join('');
 
   renderSups();refreshAlerts();}
 function quickPO(c){switchTab('po');$('poItemTxt').value=c;poPickCode=c;setTimeout(()=>$('poQty').focus(),80);}
@@ -816,14 +862,14 @@ function resetDemo(silent){if(!silent&&!confirm('Replace everything with DEMO da
    ['RM-LB-EP2-F','LABEL EP2 500 GM FRONT','Label',2400,600],
    ['RM-LB-EP2-B','LABEL EP2 500 GM BACK','Label',2200,600],
    ['RM-BOX12X500','BOX (12X500 GM)','Carton',260,60],
-   ['RM-PAIL20','PAIL 20 L WHITE','Bucket',340,80],
+   ['RM-PAIL20','PAIL 20 L WHITE','Bucket','pc',340,80],
    ['RM-LID20','LID 20 L','Cap',320,80],
    ['RM-DRUM208','DRUM 208 L STEEL','Drum',95,25],
    ['FG-0521','VENOL M/O 20W50 API SN (4X5L) — READY FG','Product',6,0],
    ['FG-0213','VENOL M/O 0W16 (12X1L) — READY FG','Product',3,0],
    ['FG-0658','V8 M/O 5W20 (4X4L) — READY FG','Product',0,0],
    ['FG-1371','EURO GULF GREASE MP3 (12X500G) — READY FG','Product',0,0]
-  ].forEach(a=>db.items.push({code:a[0],name:a[1],cat:a[2],unit:a[0].startsWith('FG')?'CTN':'pc',onHand:a[3],min:a[4]}));
+  ].forEach(a=>db.items.push({code:a[0],name:a[1],cat:a[2],unit:a[0].startsWith('FG')?'CTN':(a[2]==='Bucket'?'pc':'pc'),onHand:a[3],min:a[4]}));
   db.boms['FG-0213']={name:'VENOL M/O 0W16 API SP (RC) C5 GF/6B (12X1L)',uom:'CTN',comps:[
     {itemCode:'RM-SEAL36',qty:12,uom:'PCS'},{itemCode:'RM-CAN1L-G',qty:12,uom:'PCS'},
     {itemCode:'RM-CTN12X1',qty:1,uom:'PCS'},{itemCode:'RM-LB-VMO-FU',qty:12,uom:'PCS'},
@@ -869,8 +915,8 @@ function boot(){
     rtdb=firebase.database().ref('packagingApp');
     rtdb.once('value').then(s=>{
       const v=s.val();
-      if(v&&v.items&&v.items.length)db=v;   /* cloud wins on load */
-      else rtdb.set(db);                    /* first run: push local */
+      if(v&&v.items&&v.items.length)db=v;
+      else rtdb.set(db);
       db.lineSeq=db.lineSeq||100;db.manSeq=db.manSeq||1;db.poSeq=db.poSeq||1001;db.sups=db.sups||[];
       cloudReady=true;
       $('cloudState').innerHTML='☁️ Live — packaging-planner';
