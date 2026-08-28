@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Packaging Procurement Planner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+:root{--red:#d93025;--amber:#e8710a;--green:#188038;--blue:#1a73e8}
+*{box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif}
+body{margin:0;background:#f1f3f4;color:#202124}
+header{background:#5b3a1e;color:#fff;padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{font-size:18px;margin:0;flex:1}
+#cloudState{font-size:12px;background:rgba(255,255,255,.15);padding:4px 10px;border-radius:12px}
+nav button{background:#7a512b;color:#fff;border:none;padding:8px 12px;margin-left:5px;border-radius:5px;cursor:pointer;font-size:12.5px}
+nav button.active{background:var(--amber)}
+main{padding:16px;max-width:1250px;margin:auto}
+.cards{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.card{flex:1;min-width:150px;background:#fff;border-radius:8px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.card h2{margin:0;font-size:24px}.card p{margin:4px 0 0;font-size:12px;color:#5f6368}
+.alertbar{background:#fce8e6;border:2px solid var(--red);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--red)}
+form,.panel{background:#fff;border-radius:8px;padding:14px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+form h3,.panel h3{margin-top:0}
+input,select{padding:7px;border:1px solid #dadce0;border-radius:5px;margin:3px 6px 3px 0;font-size:13px;background:#fff}
+label{font-size:12px;color:#5f6368}
+button{background:#5b3a1e;color:#fff;border:none;padding:7px 12px;border-radius:5px;cursor:pointer;margin:3px 3px 3px 0;font-size:13px}
+button:hover{opacity:.88}.danger{background:var(--red)}.ok{background:var(--green)}.blue{background:#155a86}.blu{background:var(--blue)}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.12);font-size:13px;margin-bottom:8px}
+th{background:#5b3a1e;color:#fff;padding:8px;text-align:left;white-space:nowrap}
+td{padding:7px;border-bottom:1px solid #ecedef;white-space:nowrap}
+.tblWrap{overflow-x:auto}
+.badge{padding:2px 9px;border-radius:10px;color:#fff;font-size:11px;font-weight:600;display:inline-block}
+.b-red{background:var(--red)}.b-amb{background:var(--amber)}.b-grn{background:var(--green)}.b-gry{background:#80868b}.b-blu{background:var(--blue)}
+td.red,tr.rowRed td:first-child{color:var(--red)}
+tr.rowRed td:first-child{box-shadow:inset 5px 0 0 var(--red);font-weight:700}
+tr.sub td{background:#fffbe6!important}
+.hide{display:none}h2.sec{font-size:16px}small.note{color:#5f6368}
+[contenteditable]{outline:none;background:#fffde7;border-bottom:1px dashed #bbb;min-width:40px;display:inline-block}
+.rep{font-size:13px;border-radius:6px;padding:10px;margin-top:8px}
+.rep ul{margin:4px 0 0 18px;padding:0}
+.rep .bad{color:var(--red)}.rep .warn{color:var(--amber)}.rep .grey{color:#5f6368}
+.drop{border:2px dashed #b9a089;border-radius:8px;padding:14px;text-align:center;color:#7a512b;font-size:13px;margin:8px 0}
+.comboWrap{position:relative;display:inline-block;min-width:280px}
+.comboWrap input{width:100%}
+.opts{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #dadce0;border-radius:0 0 8px 8px;box-shadow:0 6px 14px rgba(0,0,0,.18);z-index:60;max-height:260px;overflow-y:auto;display:none}
+.opts.open{display:block}
+.opt{padding:8px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid #f1f3f4}
+.opt:hover{background:#fef7e0}
+.opt.none{color:#80868b;cursor:default}
+.comboWrap.slim{min-width:220px}
+.repBtns button{margin:4px}
+</style>
+</head>
+<body>
+<header><h1>📦 Packaging Procurement Planner</h1><span id="cloudState">💾 Local mode</span><nav id="nav"></nav></header>
+<main>
+<div id="alerts"></div>
+
+<!-- ===== DASHBOARD ===== -->
+<section id="tab-dash">
+  <div class="cards" id="cards"></div>
+  <h2 class="sec">🔴 ORDER NOW — Shortage (Packaging + FG)</h2>
+  <div class="tblWrap"><table id="shortTbl"></table></div><br>
+  <h2 class="sec">🚚 What To Buy — Exact Quantities</h2>
+  <div class="tblWrap"><table id="suggestTbl"></table></div>
+</section>
+
+<!-- ===== EXCEL IMPORT ===== -->
+<section id="tab-imp" class="hide">
+  <div class="panel">
+    <h3>1️⃣ Items Master <small class="note">(all cans, caps, labels, cartons, buckets, drums + FG stock)</small></h3>
+    <button class="blue" onclick="tpl('items')">⬇ Blank Template</button>
+    <button class="blue" onclick="dummy('items')">⬇ Dummy Items</button>
+    <div class="drop">Columns: <b>Code | Name | Type | Unit | Stock | Min Level</b></div>
+    <input type="file" accept=".xlsx,.xls,.csv" class="hide" id="fItems" onchange="impFile(this,'items')">
+    <button onclick="$('fItems').click()">📂 Upload Items Excel</button>
+    <div class="rep" id="repItems"></div>
+  </div>
+  <div class="panel">
+    <h3>2️⃣ BOM per Finished Good <small class="note">(FG code on first row, components below)</small></h3>
+    <button class="blue" onclick="tpl('bom')">⬇ Blank Template</button>
+    <button class="blue" onclick="dummy('bom')">⬇ Dummy BOM</button>
+    <div class="drop">All quantities <b>per 1 carton</b>. Liquid rows (LITER/KG) auto-excluded.</div>
+    <input type="file" accept=".xlsx,.xls,.csv" class="hide" id="fBom" onchange="impFile(this,'bom')">
+    <button onclick="$('fBom').click()">📂 Upload BOM Excel</button>
+    <div class="rep" id="repBom"></div>
+  </div>
+  <div class="panel">
+    <h3>3️⃣ Sales Orders <small class="note">(Qty = cartons)</small></h3>
+    <button class="blue" onclick="tpl('so')">⬇ Blank Template</button>
+    <button class="blue" onclick="dummy('so')">⬇ Dummy Sales Order</button>
+    <div class="drop">Columns: <b>ID | Date | Quantity | Item Code (FG) | Item Name</b></div>
+    <input type="file" accept=".xlsx,.xls,.csv" class="hide" id="fSo" onchange="impFile(this,'so')">
+    <button onclick="$('fSo').click()">📂 Upload Sales Order Excel</button>
+    <div class="rep" id="repSo"></div>
+  </div>
+</section>
+
+<!-- ===== SALES ORDERS ===== -->
+<section id="tab-so" class="hide">
+  <form onsubmit="addSO(event)">
+    <h3>+ Manual Order Line <small class="note">(type FG code or name to search)</small></h3>
+    <label>SO ID</label><input id="soId" placeholder="blank = auto">
+    <label>FG Code</label>
+    <div class="comboWrap"><input id="soCodeTxt" autocomplete="off" required placeholder="type FG code / name…"><div class="opts" id="soCodeBox"></div></div>
+    <label>Qty (CTN)</label><input id="soQty" type="number" min="0.01" step="any" required style="width:90px">
+    <label>Delivery Due</label><input id="soDate" type="date" required>
+    <button>Add & Commit</button>
+  </form>
+  <h2 class="sec">📋 Open Orders <small class="note">— optional: take qty from READY FG stock (set "Use FG")</small></h2>
+  <div class="tblWrap"><table id="soTbl"></table></div>
+</section>
+
+<!-- ===== STOCK / BOM ===== -->
+<section id="tab-stock" class="hide">
+  <div>
+    <button onclick="switchTab('rep')">📑 Reports</button>
+    <button onclick="exportCSV()">⬇ Quick Stock CSV</button>
+    <button onclick="backup()">💾 Backup</button>
+    <button onclick="$('impFile2').click()">📂 Restore</button>
+    <input type="file" id="impFile2" accept=".json" class="hide" onchange="restore(this)">
+    <button class="danger" onclick="resetDemo(false)">↺ Load Demo</button>
+  </div><br>
+  <h2 class="sec">📦 Stock — Packaging + FG — Actual vs Committed</h2>
+  <small class="note">Yellow cells editable. 🔍 = which orders committed. 🏭 rows are Finished Goods.</small><br><br>
+  <div class="tblWrap"><table id="stockTbl"></table></div><br>
+  <form onsubmit="addItem(event)">
+    <h3>+ Add Item (packaging or FG)</h3>
+    <label>Code</label><input id="itCode" required placeholder="RM-CAN-001 or FG-0213">
+    <label>Name</label><input id="itName" required>
+    <label>Type</label><select id="itCat"><option>Can</option><option>Cap</option><option>Label</option><option>Carton</option><option>Bucket</option><option>Drum</option><option>Product</option><option>Other</option></select>
+    <label>Unit</label><input id="itUnit" value="pc" required style="width:60px">
+    <label>Stock</label><input id="itQty" type="number" min="0" step="any" required style="width:90px">
+    <label>Min Level</label><input id="itMin" type="number" min="0" step="any" value="0" required style="width:90px">
+    <button>Add</button>
+  </form><br>
+  <div class="panel">
+    <h3>🏭 Finished Goods & BOM <small class="note">(type in component box to search)</small></h3>
+    <div class="comboWrap slim"><input id="bomProdTxt" autocomplete="off" placeholder="type FG code / name…"><div class="opts" id="bomProdBox"></div></div>
+    <button type="button" onclick="newProduct()">➕ New FG</button>
+    <div id="bomEditor" style="margin-top:10px"></div>
+  </div>
+</section>
+
+<!-- ===== POs ===== -->
+<section id="tab-po" class="hide">
+  <form onsubmit="addPO(event)">
+    <h3>+ New PO <small class="note">(past delivery dates not allowed)</small></h3>
+    <label>Supplier <small>(type or pick — new names auto-save)</small></label>
+    <div class="comboWrap"><input id="poSupTxt" autocomplete="off" required placeholder="type supplier name…"><div class="opts" id="poSupBox"></div></div>
+    <label>Item <small>(type code or name)</small></label>
+    <div class="comboWrap"><input id="poItemTxt" autocomplete="off" required placeholder="type item code / name…"><div class="opts" id="poItemBox"></div></div>
+    <label>Qty</label><input id="poQty" type="number" min="0.01" step="any" required style="width:90px">
+    <label>Expected Delivery</label><input id="poExp" type="date" required>
+    <button>Save PO</button>
+  </form>
+  <div class="panel">
+    <h3>👥 Suppliers</h3>
+    <form onsubmit="addSup(event)" style="padding:0;box-shadow:none;margin-bottom:8px">
+      <label>Name</label><input id="supName" required placeholder="Supplier name">
+      <label>Phone</label><input id="supPhone" placeholder="optional" style="width:130px">
+      <button>Add Supplier</button>
+    </form>
+    <div class="tblWrap"><table id="supTbl"></table></div>
+  </div>
+  <h2 class="sec">📤 Open POs <small class="note">(click date to edit; 🏭 = ready at supplier)</small></h2>
+  <div class="tblWrap"><table id="poTbl"></table></div>
+</section>
+
+<!-- ===== REPORTS ===== -->
+<section id="tab-rep" class="hide">
+  <div class="panel">
+    <h3>📑 Reports — click to preview, then download CSV (opens in Excel)</h3>
+    <div class="repBtns" id="repBtns"></div>
+    <div id="repArea" class="hide">
+      <h3 id="repTitle"></h3>
+      <button class="blue" onclick="repDownload()">⬇ Download this report (CSV)</button>
+      <div class="tblWrap" style="max-height:60vh;overflow:auto"><table id="repPrev"></table></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== HISTORY ===== -->
+<section id="tab-hist" class="hide">
+  <h2 class="sec">✅ Completed Order Lines</h2>
+  <div class="tblWrap"><table id="doneTbl"></table></div><br>
+  <h2 class="sec">📜 Activity Log</h2>
+  <div class="tblWrap"><table id="logTbl"></table></div>
+</section>
+</main>
+
+<script>
+'use strict';
+/* ================================================================
+   FIREBASE CONFIG — ✅ YOUR PROJECT (packaging-planner) IS CONNECTED
+================================================================ */
+const FB_CONFIG={
+  apiKey:"AIzaSyCqQBF42PeFATPfzWoRPTteyFUeW_8Ize4",
+  authDomain:"packaging-planner.firebaseapp.com",
+  databaseURL:"https://packaging-planner-default-rtdb.firebaseio.com",
+  projectId:"packaging-planner",
+  storageBucket:"packaging-planner.firebasestorage.app",
+  messagingSenderId:"297471285522",
+  appId:"1:297471285522:web:284ecf033f4ce37b8f3bcb"
+};
+const CLOUD_ON=true;
+
+const $=id=>document.getElementById(id);
+const KEY='pkgMRPxl';
+let db=null,expanded=null,poPickCode='',soPickCode='',saveT=null,mute=false,cloudReady=false,rtdb=null,curRep=null;
+try{db=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+if(!db||!db.items)resetDemo(true);
+db.lineSeq=db.lineSeq||100;db.manSeq=db.manSeq||1;db.poSeq=db.poSeq||1001;db.sups=db.sups||[];
+function save(){localStorage.setItem(KEY,JSON.stringify(db));
+  if(cloudReady){mute=true;clearTimeout(saveT);
+    saveT=setTimeout(()=>{rtdb.set(db).then(()=>mute=false).catch(()=>mute=false)},400);}}
+function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function f(n){return (+n).toLocaleString(undefined,{maximumFractionDigits:2});}
+function today(){return new Date().toISOString().slice(0,10);}
+function dLeft(d){return Math.ceil((new Date(d)-new Date(today()))/864e5);}
+function item(c){return db.items.find(i=>i.code===c);}
+function str(v){return String(v??'').trim();}
+function log(t){db.log.unshift({ts:Date.now(),txt:t});}
+function isFG(c){return !!db.boms[c];}
+function pick(row,regs){for(const k of Object.keys(row)){const ks=k.toLowerCase().trim();
+  for(const rg of regs)if(rg.test(ks))return row[k];}return '';}
+function parseDate(v){
+  if(!v)return today();
+  if(v instanceof Date&&!isNaN(v))return v.toISOString().slice(0,10);
+  if(typeof v==='number'&&v>20000&&v<60000){const d=new Date(Math.round((v-25569)*864e5));if(!isNaN(d))return d.toISOString().slice(0,10);}
+  const s=str(v),m=s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$/);
+  if(m){let d=+m[1],mo=+m[2],y=+m[3];if(y<100)y+=2000;if(mo>12&&d<=12){const t=d;d=mo;mo=t;}
+    return y+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0');}
+  const d=new Date(s);return isNaN(d)?today():d.toISOString().slice(0,10);}
+function num(v){if(v===''||v==null)return null;const n=parseFloat(String(v).replace(/,/g,''));return isNaN(n)?null:n;}
+function guessType(n){const s=n.toLowerCase();
+  if(/can|tin|jar|bottle/.test(s))return'Can';if(/cap|lid|seal/.test(s))return'Cap';
+  if(/label/.test(s))return'Label';if(/ctn|carton|box/.test(s))return'Carton';
+  if(/pail|bucket/.test(s))return'Bucket';if(/drum/.test(s))return'Drum';return'Other';}
+function isLiquid(n){const s=n.toLowerCase();
+  const liq=/liq|bulk|grease|base oil|additive|lubricant|engine oil|motor oil|\boil\b/.test(s);
+  const pkg=/can|tin|jar|bottle|cap|lid|seal|label|ctn|carton|box|pail|bucket|drum|shrink|plug|spout|nozzle|sleeve/.test(s);
+  return liq&&!pkg;}
+function slug(n){return'RM-'+n.toUpperCase().replace(/[^A-Z0-9]+/g,'-').slice(0,20).replace(/-+$/,'');}
+
+/* ============ CORE MRP with FG allocation ============ */
+function calc(){
+  const avail={},committed={},committedBy={},onOrder={},readyQ={},fgC={},fgBy={};
+  db.items.forEach(i=>avail[i.code]=+i.onHand);
+  db.pos.forEach(p=>{if(p.status==='open')onOrder[p.itemCode]=(onOrder[p.itemCode]||0)+ +p.qty;
+                     if(p.status==='ready')readyQ[p.itemCode]=(readyQ[p.itemCode]||0)+ +p.qty;});
+  const open=db.sos.filter(s=>s.status==='open')
+    .sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999')||a.ts-b.ts);
+  const rows=open.map(l=>{
+    const fu=Math.min(l.fgUsed||0,l.qty),eff=+(l.qty-fu).toFixed(2);
+    if(fu>0){fgC[l.code]=+((fgC[l.code]||0)+fu).toFixed(2);
+      (fgBy[l.code]=fgBy[l.code]||[]).push({so:l.soId,q:fu,date:l.date});}
+    let short=false;
+    const comps=eff<=0?[]:((db.boms[l.code]&&db.boms[l.code].comps)||[]).filter(c=>!c.excl).map(c=>{
+      const req=+(c.qty*eff);
+      const got=Math.min(req,Math.max(avail[c.itemCode]||0,0));
+      avail[c.itemCode]=(avail[c.itemCode]||0)-got;
+      const sh=+(req-got).toFixed(2);
+      if(sh>0)short=true;
+      committed[c.itemCode]=+((committed[c.itemCode]||0)+req).toFixed(2);
+      (committedBy[c.itemCode]=committedBy[c.itemCode]||[]).push({so:l.soId,code:l.code,date:l.date,q:req});
+      const it=item(c.itemCode);
+      return{itemCode:c.itemCode,name:it?it.name:'❓'+c.itemCode,unit:it?it.unit:(c.uom||''),qty:c.qty,req,got,short:sh};
+    });
+    return{l,eff,fu,comps,short,noBom:!db.boms[l.code]};
+  });
+  return{committed,committedBy,onOrder,readyQ,fgC,fgBy,rows};
+}
+function committedFor(i,calcRes){return isFG(i.code)?(calcRes.fgC[i.code]||0):(calcRes.committed[i.code]||0);}
+
+/* ============ COMBOBOX ============ */
+function combo(input,box,getData,onPick){
+  if(input._bound)return;input._bound=true;
+  function list(){
+    const s=input.value.toLowerCase();
+    const m=getData().filter(x=>x.label.toLowerCase().includes(s)).slice(0,15);
+    let h=m.map(x=>'<div class="opt" data-v="'+esc(x.value)+'">'+esc(x.label)+'</div>').join('');
+    if(!m.length&&s)h='<div class="opt none">no match</div>';
+    box.innerHTML=h;box.classList.add('open');}
+  input.addEventListener('focus',list);
+  input.addEventListener('input',list);
+  input.addEventListener('blur',()=>setTimeout(()=>box.classList.remove('open'),160));
+  box.addEventListener('mousedown',e=>{
+    const o=e.target.closest('.opt');
+    if(!o||o.classList.contains('none'))return;
+    input.value=o.dataset.v;box.classList.remove('open');
+    if(onPick)onPick(o.dataset.v);});
+}
+const itemOpts=()=>db.items.map(i=>({value:i.code,label:i.code+' · '+i.name}));
+const fgOpts=()=>Object.keys(db.boms).map(c=>({value:c,label:c+' · '+db.boms[c].name}));
+function initCombos(){
+  combo($('poItemTxt'),$('poItemBox'),itemOpts,v=>{poPickCode=v;});
+  combo($('poSupTxt'),$('poSupBox'),()=>db.sups.map(s=>({value:s.name,label:'👥 '+s.name+(s.phone?' · '+s.phone:'')})));
+  combo($('soCodeTxt'),$('soCodeBox'),fgOpts,v=>{soPickCode=v;});
+  combo($('bomProdTxt'),$('bomProdBox'),fgOpts,v=>{$('bomProdTxt').dataset.code=v;renderBOM();});
+}
+function bindBomCombos(){
+  document.querySelectorAll('.cbitem').forEach(inp=>{
+    const i=+inp.dataset.i;
+    combo(inp,inp.parentElement.querySelector('.opts'),itemOpts,v=>{upComp(bomPickFgSel(),i,'itemCode',v);renderBOM();});});
+}
+function bomPickFgSel(){return $('bomProdTxt').dataset.code||'';}
+
+/* ============ SUPPLIERS ============ */
+function addSup(e){e.preventDefault();
+  const n=str($('supName').value);
+  if(db.sups.some(s=>s.name.toLowerCase()===n.toLowerCase()))return alert('Supplier already exists.');
+  db.sups.push({name:n,phone:str($('supPhone').value)});
+  log('👥 Supplier added: '+n);save();renderSups();e.target.reset();}
+function supRename(i){const n=prompt('Supplier name:',db.sups[i].name);
+  if(!n||!str(n))return;const old=db.sups[i].name;db.sups[i].name=str(n);
+  db.pos.forEach(p=>{if(p.sup===old)p.sup=db.sups[i].name;});
+  save();renderSups();render();}
+function supDel(i){if(db.pos.some(p=>p.sup===db.sups[i].name&&p.status!=='recd'))
+    return alert('Supplier has open/ready POs first.');
+  if(confirm('Delete supplier "'+db.sups[i].name+'"?')){db.sups.splice(i,1);save();renderSups();render();}}
+function renderSups(){
+  $('supTbl').innerHTML='<tr><th>Supplier</th><th>Phone</th><th>Open/Ready POs</th><th colspan="2">Action</th></tr>'+
+   (db.sups.map((s,i)=>{const n=db.pos.filter(p=>p.sup===s.name&&p.status!=='recd').length;
+     return '<tr><td>'+esc(s.name)+'</td><td>'+esc(s.phone||'-')+'</td><td>'+(n||'-')+'</td>'+
+     '<td><button onclick="supRename('+i+')">✏️</button></td><td><button class="danger" onclick="supDel('+i+')">🗑</button></td></tr>';}).join('')
+   ||'<tr><td colspan="5">No suppliers yet</td></tr>');}
+
+/* ============ ITEMS ============ */
+function addItem(e){e.preventDefault();
+  const c=str($('itCode').value).toUpperCase();
+  if(item(c))return alert('Code already exists: '+c);
+  db.items.push({code:c,name:str($('itName').value),cat:$('itCat').value,unit:str($('itUnit').value)||'pc',
+    onHand:+$('itQty').value||0,min:+$('itMin').value||0});
+  save();render();e.target.reset();}
+function delItem(c){
+  if(db.boms[c])return alert('This is an FG with a BOM.\nRemove the FG first (BOM editor).');
+  if(Object.values(db.boms).some(b=>b.comps.some(x=>x.itemCode===c)))
+    return alert('Used in a BOM — remove it there first.');
+  if(confirm('Delete '+c+'?')){db.items=db.items.filter(i=>i.code!==c);save();render();}}
+function editNum(c,fld,v){const it=item(c);if(!it)return;const n=num(v);if(n==null)return render();
+  it[fld]=Math.max(0,n);save();render();}
+
+/* ============ SALES ORDERS ============ */
+function addSO(e){e.preventDefault();
+  const code=(soPickCode||'').toUpperCase();
+  if(!db.boms[code])return alert('Pick an FG code from the list (type to search).');
+  const id=str($('soId').value)||'MAN-'+String(db.manSeq++).padStart(3,'0');
+  const qty=+$('soQty').value,date=$('soDate').value;
+  const ex=db.sos.find(s=>s.status==='open'&&s.soId===id&&s.code===code);
+  if(ex){ex.qty=qty;ex.date=date;}
+  else db.sos.push({key:id+'~'+code+'~'+(db.lineSeq++),soId:id,code,date,qty,ts:Date.now(),status:'open'});
+  save();render();e.target.reset();soPickCode='';$('soCodeTxt').value='';}
+function setFG(i){const r=calc().rows[i];if(!r)return;
+  const inp=$('fgi'+i);if(!inp)return;
+  const v=Math.max(0,Math.min(r.l.qty,num(inp.value)??0));
+  r.l.fgUsed=+v.toFixed(2);
+  log('🏭 '+r.l.soId+' / '+r.l.code+': '+(v>0?f(v)+' CTN from ready FG stock':'FG allocation removed'));
+  save();render();}
+function delSO(key){if(confirm('Cancel this line?\nCommitted packaging & FG allocation will be RELEASED.'))
+  {db.sos=db.sos.filter(s=>s.key!==key);save();render();}}
+function completeSO(key){const l=db.sos.find(s=>s.key===key);if(!l)return;
+  const fu=Math.min(l.fgUsed||0,l.qty),eff=l.qty-fu;
+  const lines=[];
+  if(fu>0)lines.push('• '+f(fu)+' CTN taken from READY FG stock ('+l.code+')');
+  if(eff>0)((db.boms[l.code]&&db.boms[l.code].comps)||[]).filter(c=>!c.excl)
+    .forEach(c=>lines.push('• '+f(eff)+' CTN × '+f(c.qty)+' = '+f(c.qty*eff)+' '+((item(c.itemCode)||{}).name||c.itemCode)));
+  if(!confirm('ORDER COMPLETED — '+l.soId+' / '+l.code+' qty '+f(l.qty)+' CTN?\n\nDeduct:\n'+lines.join('\n')))return;
+  const fgit=item(l.code);if(fu>0&&fgit)fgit.onHand=+(fgit.onHand-fu).toFixed(2);
+  if(eff>0)((db.boms[l.code]&&db.boms[l.code].comps)||[]).forEach(c=>{if(c.excl)return;
+    const it=item(c.itemCode);if(it)it.onHand=+(it.onHand-c.qty*eff).toFixed(2);});
+  l.status='done';l.doneTs=Date.now();
+  log('✅ '+l.soId+' / '+l.code+' ('+f(l.qty)+' CTN'+(fu>0?', '+f(fu)+' from FG':'')+') completed');
+  save();render();}
+
+/* ============ POs ============ */
+function addPO(e){e.preventDefault();
+  const exp=$('poExp').value;
+  if(exp<today())return alert('❌ Expected delivery date cannot be in the past.');
+  let supName=str($('poSupTxt').value);
+  if(!supName)return alert('Enter supplier name.');
+  const found=db.sups.find(s=>s.name.toLowerCase()===supName.toLowerCase());
+  if(found)supName=found.name;
+  else{db.sups.push({name:supName,phone:''});log('👥 Supplier added: '+supName);}
+  const code=str($('poItemTxt').value).toUpperCase();
+  const it=item(code)||(poPickCode&&item(poPickCode));
+  if(!it)return alert('Pick the item from the list (type to search).');
+  db.pos.push({id:'PO-'+String(db.poSeq++).padStart(4,'0'),sup:supName,
+    itemCode:it.code,qty:+$('poQty').value,exp:exp,status:'open'});
+  log('📤 '+supName+' PO placed: '+it.code+' × '+f(+$('poQty').value)+' (due '+exp+')');
+  save();renderSups();render();e.target.reset();poPickCode='';$('poSupTxt').value='';}
+function poReady(id){const p=db.pos.find(x=>x.id===id);
+  if(!confirm('Mark '+id+' as READY WITH SUPPLIER?'))return;
+  p.status='ready';log('🏭 '+id+' ready at '+p.sup);save();render();}
+function poReopen(id){db.pos.find(x=>x.id===id).status='open';save();render();}
+function receivePO(id){const p=db.pos.find(x=>x.id===id),it=item(p.itemCode);
+  if(!confirm('RECEIVED '+id+' into your store?\n+'+f(p.qty)+' '+(it?it.name:'')+' added to stock.'))return;
+  if(it)it.onHand+=p.qty;p.status='recd';
+  log('📥 '+id+' received: '+f(p.qty)+' '+(it?it.name:p.itemCode)+' from '+p.sup);
+  save();render();}
+function cancelPO(id){if(confirm('Delete this PO?')){db.pos=db.pos.filter(p=>p.id!==id);save();render();}}
+function editPODate(id,v){const p=db.pos.find(x=>x.id===id);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(v).trim()))return render();
+  p.exp=v.trim();
+  log('📅 '+id+' delivery date changed to '+p.exp);save();render();}
+
+/* ============ FG / BOM EDITOR ============ */
+function newProduct(){const c=str(prompt('FG Code (e.g. FG-0213):')).toUpperCase();if(!c)return;
+  if(db.boms[c]&&!confirm('FG '+c+' exists — keep its BOM lines? (Cancel = overwrite)'))db.boms[c]={name:c,uom:'CTN',comps:[]};
+  if(!db.boms[c])db.boms[c]={name:c,uom:'CTN',comps:[]};
+  const n=str(prompt('FG Description:',db.boms[c].name));if(n)db.boms[c].name=n;
+  const u=str(prompt('FG UOM (CTN):',db.boms[c].uom));if(u)db.boms[c].uom=u;
+  if(!item(c))db.items.push({code:c,name:db.boms[c].name,cat:'Product',unit:'CTN',onHand:0,min:0});
+  $('bomProdTxt').dataset.code=c;$('bomProdTxt').value=c;
+  save();renderBOM();render();}
+function addComp(){const fg=bomPickFgSel();if(!fg)return alert('Select an FG first (type in the box above).');
+  db.boms[fg].comps.push({itemCode:'',qty:1,uom:'',excl:false});save();renderBOM();}
+function upComp(fg,i,fld,v){const c=db.boms[fg]&&db.boms[fg].comps[i];if(!c)return;
+  if(fld==='itemCode')c.itemCode=str(v).toUpperCase();
+  else if(fld==='excl')c.excl=!!v;else{const n=num(v);c.qty=n==null?c.qty:Math.max(0,n);}
+  save();}
+function rmComp(fg,i){db.boms[fg].comps.splice(i,1);save();renderBOM();render();}
+function renderBOM(){const fg=bomPickFgSel();
+  if(!fg){$('bomEditor').innerHTML='<small class="note">Type an FG code above or create new.</small>';return;}
+  const b=db.boms[fg];
+  $('bomEditor').innerHTML='<small class="note"><b>'+esc(fg)+'</b> — '+esc(b.name)+' (quantities per 1 '+esc(b.uom)+')</small>'+
+   '<table><tr><th>Component (type to search)</th><th>Qty per 1 '+esc(b.uom)+'</th><th>Count?</th><th></th></tr>'+
+   b.comps.map((c,i)=>{const it=item(c.itemCode);
+     return '<tr'+(c.excl?' class="sub"':'')+'><td><div class="comboWrap slim">'+
+      '<input class="cbitem" data-i="'+i+'" value="'+esc(c.itemCode)+'" placeholder="type code / name…" autocomplete="off">'+
+      '<div class="opts"></div></div>'+(it?'<small class="note">'+esc(it.name)+'</small>':'')+'</td>'+
+      '<td><input type="number" step="any" min="0" value="'+c.qty+'" oninput="upComp(\''+fg+'\','+i+',\'qty\',this.value)" style="width:80px"></td>'+
+      '<td><input type="checkbox" '+(c.excl?'':'checked')+' onchange="upComp(\''+fg+'\','+i+',\'excl\',this.checked)"> '+(c.excl?'excluded (liquid)':'packing')+'</td>'+
+      '<td><button class="danger" onclick="rmComp(\''+fg+'\','+i+')">✖</button></td></tr>';}).join('')+
+   '</table><button type="button" onclick="addComp()">＋ Component</button>';
+  bindBomCombos();}
+
+/* ============ EXCEL IMPORT ============ */
+function impFile(inp,kind){
+  if(typeof XLSX==='undefined'){alert('Excel library not loaded — connect internet once.');inp.value='';return;}
+  const r=new FileReader();
+  r.onload=e=>{try{
+    const wb=XLSX.read(e.target.result,{type:'binary',cellDates:true});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+    if(kind==='items')rep('repItems',impItems(rows));
+    if(kind==='bom')rep('repBom',impBOM(rows));
+    if(kind==='so')rep('repSo',impSO(rows));
+    save();renderBOM();render();
+  }catch(err){alert('Could not read file: '+err.message);}
+  inp.value='';};
+  r.readAsBinaryString(inp.files[0]);}
+function rep(id,html){$(id).innerHTML='<div class="rep">'+html+'</div>';}
+function impItems(rows){let a=0,u=0,s=0;
+  rows.forEach(r=>{
+    const code=str(pick(r,[/^code$/i,/item ?code/i])).toUpperCase();
+    const name=str(pick(r,[/^name$|item ?name|desc/i]));
+    if(!code&&!name){s++;return;}
+    const c=code||slug(name);
+    const cat=str(pick(r,[/^type$|category|^cat$/i]));
+    const stock=num(pick(r,[/stock|on ?hand|in ?hand/i])),min=num(pick(r,[/min/i]));
+    const unit=str(pick(r,[/^unit$|uom/i]));
+    const it=item(c);
+    if(it){if(name)it.name=name;if(unit)it.unit=unit;if(cat)it.cat=cat;
+      if(stock!=null)it.onHand=stock;if(min!=null)it.min=min;u++;}
+    else{db.items.push({code:c,name:name||c,cat:cat||guessType(name||c),unit:unit||'pc',
+      onHand:stock??0,min:min??0});a++;}});
+  log('📄 Items Excel: +'+a+' new, '+u+' updated');
+  return '✔ Items imported — <b class="warn">'+a+' added</b>, '+u+' updated'+(s?', <span class="grey">'+s+' skipped</span>':'');}
+function impBOM(rows){
+  const seen={};let fgs=0,comps=0;const created=[],excluded=[];let cur=null;
+  rows.forEach(r=>{
+    const fgc=str(pick(r,[/fg ?code/i])).toUpperCase();
+    if(fgc){cur=fgc;
+      if(!db.boms[cur])db.boms[cur]={name:str(pick(r,[/item description|fg ?desc|fg ?name|product/i]))||cur,
+        uom:str(pick(r,[/item uom|fg ?uom/i]))||'CTN',comps:[]};
+      const d=str(pick(r,[/item description|fg ?desc|fg ?name|product/i]));if(d)db.boms[cur].name=d;
+      const u=str(pick(r,[/item uom|fg ?uom/i]));if(u)db.boms[cur].uom=u;
+      if(!seen[cur]){seen[cur]=1;fgs++;}
+      if(!item(cur))db.items.push({code:cur,name:db.boms[cur].name,cat:'Product',unit:db.boms[cur].uom,onHand:0,min:0});}
+    if(!cur)return;
+    const cn=str(pick(r,[/item name \(items\)|component name|item name/i]));
+    let cc=str(pick(r,[/item code \(items\)|component code|comp ?code/i])).toUpperCase();
+    const cq=num(pick(r,[/qty \(items\)|component qty|consumption|qty per/i,/^qty|quantity/i]));
+    const cu=str(pick(r,[/uom \(items\)|component uom/i]));
+    if((!cn&&!cc)||cq==null||cq<=0)return;
+    const ex=isLiquid(cn||cc);
+    let it=cc?item(cc):null;
+    if(!it&&cn){it=db.items.find(x=>x.name.toLowerCase()===cn.toLowerCase())
+      ||db.items.find(x=>x.name.toLowerCase().includes(cn.toLowerCase())||cn.toLowerCase().includes(x.name.toLowerCase()));}
+    if(!it){cc=cc||slug(cn);db.items.push({code:cc,name:cn||cc,cat:guessType(cn||cc),
+      unit:cu||'pc',onHand:0,min:0});it=item(cc);created.push(cc+' — '+cn);}
+    if(ex)excluded.push(cn||cc);
+    db.boms[cur].comps.push({itemCode:it.code,qty:cq,uom:cu,excl:ex});comps++;});
+  log('📄 BOM Excel: '+fgs+' FG, '+comps+' components');
+  return '✔ BOM imported — <b>'+fgs+' FG codes</b>, '+comps+' components'+
+    (excluded.length?'<div class="grey">Excluded as liquid/semi: '+esc(excluded.join(', '))+'</div>':'')+
+    (created.length?'<div class="warn">Auto-added items (set their stock!): <ul>'+created.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul></div>':'');}
+function impSO(rows){let ok=0,upd=0,skip=0;const missing={};
+  rows.forEach(r=>{
+    const soId=str(pick(r,[/^id$|so ?(no|id|num)|order ?(no|id)/i]))||'MAN-'+String(db.manSeq++).padStart(3,'0');
+    const code=str(pick(r,[/item code|fg ?code/i])).toUpperCase();
+    const q=num(pick(r,[/quantity|qty/i]));const qv=q==null?1:q;
+    if(!code||qv<=0){skip++;return;}
+    if(!db.boms[code]){missing[code]=(missing[code]||0)+1;skip++;return;}
+    const dt=parseDate(pick(r,[/date/i]));
+    const name=str(pick(r,[/item name|desc/i]));if(name&&!db.boms[code].name)db.boms[code].name=name;
+    const ex=db.sos.find(s=>s.status==='open'&&s.soId===soId&&s.code===code);
+    if(ex){ex.qty=qv;ex.date=dt;upd++;}
+    else{db.sos.push({key:soId+'~'+code+'~'+(db.lineSeq++),soId:soId,code:code,name:name,date:dt,qty:qv,ts:Date.now(),status:'open'});ok++;}});
+  log('📄 SO Excel: +'+ok+' lines ('+upd+' updated)');
+  return '✔ Sales orders imported — <b class="warn">'+ok+' new lines</b>, '+upd+' updated, '+skip+' skipped'+
+    (Object.keys(missing).length?'<div class="bad">No BOM for: <b>'+Object.keys(missing).join(', ')+'</b> — upload BOM first, re-upload file</div>':'');}
+
+/* ============ TEMPLATES & DUMMIES ============ */
+function dlXlsx(aoa,file,sheet){
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),sheet||'Sheet1');
+  XLSX.writeFile(wb,file);}
+function tpl(name){
+  if(typeof XLSX==='undefined')return alert('Connect internet once for Excel library.');
+  let aoa;
+  if(name==='items')aoa=[['Code','Name','Type','Unit','Stock','Min Level'],
+    ['RM-CAN1L-G','EMPTY CAN (1L) GREEN PT-150643','Can','pc',5000,1000],
+    ['RM-SEAL36','INDUCTION SEAL 36MM (1L)','Cap','pc',4800,1000]];
+  if(name==='bom')aoa=[['FG Code','Item Description','Item UOM','Item Code (Items)','Item Name (Items)','Qty (Items)','UOM (Items)'],
+    ['FG-0213','VENOL M/O 0W16 API SP (12X1L)','CTN','RM-SEAL36','INDUCTION SEAL 36MM (1L)','12','PCS'],
+    ['','','','RM-CAN1L-G','EMPTY CAN (1L) GREEN','12','PCS'],
+    ['','','','RM-CTN12X1','EMPTY CTN (12X1L)','1','PCS'],
+    ['','','','RM-LB-VMO','LABEL 1L','12','PCS']];
+  if(name==='so')aoa=[['Sr','ID','Date','Quantity (Sales Order Item)','Item Code (Sales Order Item)','Item Name (Sales Order Item)'],
+    [1,'GE-SO-2026-0935','11-04-2026',1,'FG-0213','VENOL M/O 0W16 API SP (12X1L)']];
+  dlXlsx(aoa,name+'_template.xlsx');}
+function dummy(name){
+  if(typeof XLSX==='undefined')return alert('Connect internet once for Excel library.');
+  if(name==='items')dlXlsx([
+    ['Code','Name','Type','Unit','Stock','Min Level'],
+    ['RM-SEAL36','INDUCTION SEAL VENOL 36 MM (1L) SILICON','Cap','pc',4800,1000],
+    ['RM-CAN1L-G','EMPTY CAN (1L) VENOL FL GREEN PT 150643','Can','pc',5200,1200],
+    ['RM-CTN12X1','EMPTY CTN VENOL (12X1L) UNIVERSAL EB 750 GM','Carton','pc',400,100],
+    ['RM-LB-VMO-FU','LABELS VENOL 0W16 (1L) FU','Label','pc',4200,1000],
+    ['RM-LB-VMO-FD','LABELS VENOL 0W16 (1L) FD','Label','pc',3000,1000],
+    ['RM-LB-VMO-B','LABELS VENOL 0W16 (1L) BACK','Label','pc',2600,1000],
+    ['RM-CAP61','CAP 61 MM (5L)','Cap','pc',25,300],
+    ['RM-CAN5L-BL','EMPTY CAN (5L) VENOL BLUE','Can','pc',350,120],
+    ['RM-CTN4X5','EMPTY CTN (4X5L)','Carton','pc',90,40],
+    ['RM-LB-5L-FA','LABEL FRONT-A VENOL 20W50 5L','Label','pc',380,100],
+    ['RM-LB-5L-FB','LABEL FRONT-B VENOL 20W50 5L','Label','pc',360,100],
+    ['RM-LB-5L-BK','LABEL BACK VENOL 20W50 5L','Label','pc',350,100],
+    ['RM-CAP38','CAP 38 MM (4L)','Cap','pc',640,200],
+    ['RM-CAN4L-BG','EMPTY CAN (4L) BIOGREEN','Can','pc',500,150],
+    ['RM-CTN4X4','EMPTY CTN (4X4L)','Carton','pc',120,40],
+    ['RM-LB-V8-4L','LABEL V8 5W20 4L FRONT','Label','pc',480,120],
+    ['RM-JAR500','GREASE JAR 500 GM GOLD PLASTIC','Can','pc',2600,500],
+    ['RM-LID500','LID 500 GM JAR','Cap','pc',3000,500],
+    ['RM-LB-EP2-F','LABEL EP2 500 GM FRONT','Label','pc',2400,600],
+    ['RM-LB-EP2-B','LABEL EP2 500 GM BACK','Label','pc',2200,600],
+    ['RM-BOX12X500','BOX (12X500 GM)','Carton','pc',260,60],
+    ['RM-PAIL20','PAIL 20 L WHITE','Bucket','pc',340,80],
+    ['RM-LID20','LID 20 L','Cap','pc',320,80],
+    ['RM-DRUM208','DRUM 208 L STEEL','Drum','pc',95,25],
+    ['FG-0521','VENOL M/O 20W50 API SN (4X5L) — READY FG','Product','CTN',6,0],
+    ['FG-0213','VENOL M/O 0W16 (12X1L) — READY FG','Product','CTN',3,0]
+  ],'dummy_items.xlsx','Items');
+  if(name==='bom')dlXlsx([
+    ['FG Code','Item Description','Item UOM','Item Code (Items)','Item Name (Items)','Qty (Items)','UOM (Items)'],
+    ['FG-0213','VENOL M/O 0W16 API SP (RC) C5 GF/6B (12X1L)','CTN','RM-SEAL36','INDUCTION SEAL VENOL 36 MM (1L) SILICON',12,'PCS'],
+    ['','','','RM-CAN1L-G','EMPTY CAN (1L) VENOL FL GREEN PT 150643',12,'PCS'],
+    ['','','','RM-CTN12X1','EMPTY CTN VENOL (12X1L) UNIVERSAL EB 750 GM',1,'PCS'],
+    ['','','','RM-LB-VMO-FU','LABELS VENOL 0W16 (1L) FU',12,'PCS'],
+    ['','','','RM-LB-VMO-FD','LABELS VENOL 0W16 (1L) FD',12,'PCS'],
+    ['','','','RM-LB-VMO-B','LABELS VENOL 0W16 (1L) BACK',12,'PCS'],
+    ['','','','','VENOL LIQ M/O 0W16 API SP',12,'LITER'],
+    ['FG-0521','VENOL M/O 20W50 API SN (4X5L)','CTN','RM-CAP61','CAP 61 MM (5L)',4,'PCS'],
+    ['','','','RM-CAN5L-BL','EMPTY CAN (5L) VENOL BLUE',4,'PCS'],
+    ['','','','RM-CTN4X5','EMPTY CTN (4X5L)',1,'PCS'],
+    ['','','','RM-LB-5L-FA','LABEL FRONT-A VENOL 20W50 5L',4,'PCS'],
+    ['','','','RM-LB-5L-FB','LABEL FRONT-B VENOL 20W50 5L',4,'PCS'],
+    ['','','','RM-LB-5L-BK','LABEL BACK VENOL 20W50 5L',4,'PCS'],
+    ['','','','','VENOL LIQ M/O 20W50 API SN',20,'LITER']
+  ],'dummy_bom.xlsx','BOM');
+  if(name==='so')dlXlsx([
+    ['Sr','ID','Date','Quantity (Sales Order Item)','Item Code (Sales Order Item)','Item Name (Sales Order Item)'],
+    [1,'GE-SO-2026-0935','05-05-2026',10,'FG-0521','VENOL M/O 20W50 API SN (4X5L)'],
+    [2,'GE-SO-2026-0935','05-05-2026',5,'FG-0213','VENOL M/O 0W16 API SP (RC) C5 GF/6B (12X1L)']
+  ],'dummy_sales_order.xlsx','SO');}
+
+/* ============ REPORTS ============ */
+const REPORTS=[
+ ['stock','📦 Current Stock (all items)',()=>{
+   const C=calc();
+   return{head:['Code','Name','Type','Unit','Actual Qty','Min Level','On Order PO','Ready at Supplier','Status'],
+    rows:db.items.map(i=>{const cm=committedFor(i,C),fr=i.onHand-cm;
+      return[i.code,i.name,i.cat,i.unit,i.onHand,i.min,C.onOrder[i.code]||0,C.readyQ[i.code]||0,
+        fr<0?'SHORTAGE':fr<i.min?'LOW':'OK'];}),
+    file:'report_current_stock'};}],
+ ['stockc','📦 Stock After Commitment',()=>{
+   const c=calc();
+   return{head:['Code','Name','Type','Unit','Actual','Committed','After Commitment','On Order','Ready at Sup.','Min'],
+    rows:db.items.map(i=>{const cm=committedFor(i,c);
+      return[i.code,i.name,i.cat,i.unit,i.onHand,cm,i.onHand-cm,c.onOrder[i.code]||0,c.readyQ[i.code]||0,i.min];}),
+    file:'report_stock_after_commitment'};}],
+ ['fg','🏭 FG Stock (ready goods)',()=>{
+   const c=calc();
+   return{head:['FG Code','Description','Unit','FG In Hand','Committed by SO','FG Free','Min'],
+    rows:db.items.filter(i=>isFG(i.code)).map(i=>{const cm=c.fgC[i.code]||0;
+      return[i.code,i.name,i.unit,i.onHand,cm,i.onHand-cm,i.min];}),
+    file:'report_fg_stock'};}],
+ ['short','🔴 Shortage — Order Now',()=>{
+   const c=calc();const out=[];
+   db.items.forEach(i=>{const cm=committedFor(i,c);
+     if(cm>i.onHand)out.push([i.code,i.name,i.onHand,cm,i.onHand-cm,
+       (c.onOrder[i.code]||0)+(c.readyQ[i.code]||0),'ORDER NOW']);});
+   return{head:['Code','Item','Actual','Committed','Short','Incoming (PO+Ready)','Action'],rows:out,file:'report_shortage'};}],
+ ['buy','🚚 Purchase Suggestions',()=>{
+   const c=calc();const out=[];
+   db.items.forEach(i=>{const cm=committedFor(i,c);
+     const gap=(cm+i.min)-i.onHand-((c.onOrder[i.code]||0)+(c.readyQ[i.code]||0));
+     if(gap>0)out.push([i.code,i.name,Math.ceil(gap),i.unit]);});
+   return{head:['Code','Item','Suggested Qty','Unit'],rows:out,file:'report_purchase_suggestions'};}],
+ ['poall','📤 All POs (open + ready + received)',()=>{
+   return{head:['PO','Supplier','Item Code','Item','Qty','Unit','Expected Delivery','Days Left(-overdue)','Status'],
+    rows:db.pos.map(p=>{const it=item(p.itemCode),dl=dLeft(p.exp);
+      return[p.id,p.sup,p.itemCode,it?it.name:'?',p.qty,it?it.unit:'',p.exp,
+        p.status==='recd'?'-':dl,p.status==='open'?'OPEN':p.status==='ready'?'READY WITH SUPPLIER':'RECEIVED'];})
+      .sort((a,b)=>String(a[6]).localeCompare(String(b[6]))),
+    file:'report_all_pos'};}],
+ ['poready','🏭 Ready With Supplier Only',()=>{
+   return{head:['PO','Supplier','Item Code','Item','Qty','Unit','Ready Since (expected)','Note'],
+    rows:db.pos.filter(p=>p.status==='ready').map(p=>{const it=item(p.itemCode);
+      return[p.id,p.sup,p.itemCode,it?it.name:'?',p.qty,it?it.unit:'',p.exp,'collect / arrange transport'];}),
+    file:'report_ready_at_supplier'};}],
+ ['so','📝 Open Sales Orders (production plan by date)',()=>{
+   const c=calc();
+   return{head:['SO ID','FG Code','Description','Qty CTN','From FG','Produce CTN','Due Date','Days Left(-late)','Packaging Status'],
+    rows:c.rows.map(r=>[r.l.soId,r.l.code,(db.boms[r.l.code]||{}).name||'',r.l.qty,r.fu||0,r.eff,r.l.date,
+      dLeft(r.l.date),r.noBom?'NO BOM':r.short?'MATERIAL SHORT':'READY TO PACK']),
+    file:'report_open_sales_orders'};}],
+ ['done','✅ Completed Orders',()=>{
+   return{head:['SO ID','FG Code','Qty CTN','From FG','Completed On'],
+    rows:db.sos.filter(s=>s.status==='done').sort((a,b)=>b.doneTs-a.doneTs)
+      .map(s=>[s.soId,s.code,s.qty,s.fgUsed||0,new Date(s.doneTs).toLocaleString()]),
+    file:'report_completed_orders'};}],
+ ['sup','👥 Suppliers',()=>{
+   return{head:['Supplier','Phone','Open/Ready POs'],
+    rows:db.sups.map(s=>[s.name,s.phone||'',db.pos.filter(p=>p.sup===s.name&&p.status!=='recd').length]),
+    file:'report_suppliers'};}]
+];
+function showReport(k){const r=REPORTS.find(x=>x[0]===k);if(!r)return;
+  curRep=r[2]();curRep.file+='_'+today()+'.csv';
+  $('repTitle').textContent=r[1];
+  $('repPrev').innerHTML='<tr>'+curRep.head.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr>'+
+    (curRep.rows.length?curRep.rows.map(row=>'<tr>'+row.map(c=>'<td>'+esc(c)+'</td>').join('')+'</tr>').join('')
+     :'<tr><td colspan="'+curRep.head.length+'">No data</td></tr>');
+  $('repArea').classList.remove('hide');
+  [...document.querySelectorAll('#repBtns button')].forEach(b=>b.classList.toggle('blue',b.dataset.k===k));}
+function repDownload(){
+  const csv=curRep.head.join(',')+'\n'+curRep.rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  dl('data:text/csv;charset=utf-8,'+encodeURIComponent(csv),curRep.file);}
+function renderRepBtns(){
+  $('repBtns').innerHTML=REPORTS.map(r=>'<button data-k="'+r[0]+'" onclick="showReport(\''+r[0]+'\')">'+r[1]+'</button>').join('');}
+
+/* ============ ALERTS ============ */
+function refreshAlerts(){const c=calc(),agg={};
+  c.rows.forEach(r=>r.comps.forEach(x=>{if(x.short>0)agg[x.itemCode]={n:x.name,u:x.unit,s:(agg[x.itemCode]?.s||0)+x.short,
+    inc:(c.onOrder[x.itemCode]||0)+(c.readyQ[x.itemCode]||0)};}));
+  const m=Object.values(agg).map(o=>'🔴 <b>'+esc(o.n)+'</b> SHORT <b>'+f(o.s)+' '+esc(o.u)+'</b> → PLEASE ORDER NOW'+(o.inc?' <span style="color:var(--green)">(+'+f(o.inc)+' incoming)</span>':''));
+  db.items.forEach(i=>{const cm=c.fgC[i.code]||0;
+    if(cm>i.onHand)m.push('🏭 FG <b>'+esc(i.code)+'</b> not enough ready stock (need '+f(cm)+', have '+f(i.onHand)+') — produce or reduce FG allocation');});
+  db.pos.filter(p=>p.status!=='recd'&&p.exp<today()).forEach(p=>
+    m.unshift('🚚 ⏰ <b>'+p.id+'</b> ('+esc(p.sup)+') OVERDUE '+(-dLeft(p.exp))+'d — '+(p.status==='ready'?'ready at supplier, arrange collection!':'chase supplier!')));
+  $('alerts').innerHTML=m.length?'<div class="alertbar"><b>🚨 ACTION REQUIRED:</b><br>'+m.join('<br>')+'</div>':'';}
+
+/* ============ RENDER ============ */
+function badge(c,t){return'<span class="badge '+c+'">'+t+'</span>';}
+function toggleDetail(c){expanded=expanded===c?null:c;render();}
+function render(){const C=calc();const{committed,committedBy,onOrder,readyQ,fgC,fgBy,rows}=C;
+  let shorts=0,lows=0;
+  db.items.forEach(i=>{const cm=committedFor(i,C);
+    if(cm>i.onHand)shorts++;else if(i.onHand-cm<i.min)lows++;});
+  const openPO=db.pos.filter(p=>p.status!=='recd'),over=openPO.filter(p=>p.exp<today());
+  $('cards').innerHTML=[
+    [rows.length,'Open SO Lines','#5b3a1e'],
+    [rows.filter(r=>r.short).length,'Lines Blocked (No Packaging)',rows.some(r=>r.short)?'var(--red)':'var(--green)'],
+    [shorts,'Items In Shortage',shorts?'var(--red)':'var(--green)'],
+    [lows,'Below Min Level',lows?'var(--amber)':'var(--green)'],
+    [openPO.length,'POs (Ordered + At Supplier)','#5b3a1e'],
+    [over.length,'PO Deliveries Overdue',over.length?'var(--red)':'var(--green)']
+  ].map(c=>'<div class="card"><h2 style="color:'+c[2]+'">'+c[0]+'</h2><p>'+c[1]+'</p></div>').join('');
+
+  let sr='';
+  db.items.forEach(i=>{const cm=committedFor(i,C);
+    if(cm>i.onHand)sr+='<tr class="rowRed"><td>'+esc(i.code)+'</td><td>'+esc(i.name)+'</td><td>'+f(i.onHand)+
+      '</td><td class="red">'+f(cm)+'</td><td class="red">'+f(i.onHand-cm)+'</td><td>'+
+      ((onOrder[i.code]||readyQ[i.code])?
+        (onOrder[i.code]?f(onOrder[i.code])+' ordered':'')+(onOrder[i.code]&&readyQ[i.code]?' + ':'')+(readyQ[i.code]?f(readyQ[i.code])+' ready ✔':'')
+        :'❌ none — RAISE PO')+'</td></tr>';});
+  $('shortTbl').innerHTML='<tr><th>Code</th><th>Item / FG</th><th>Actual</th><th>Committed</th><th>After Commitment</th><th>With Supplier</th></tr>'+
+    (sr||'<tr><td colspan="6">🎉 Nothing short</td></tr>');
+
+  let sg='';
+  db.items.forEach(i=>{const cm=committedFor(i,C);
+    const gap=(cm+i.min)-i.onHand-((onOrder[i.code]||0)+(readyQ[i.code]||0));
+    if(gap>0)sg+='<tr><td>'+esc(i.code)+'</td><td>'+esc(i.name)+'</td><td>Order <b style="color:var(--red)">'+f(Math.ceil(gap))+' '+esc(i.unit)+'</b></td>'+
+      '<td><button onclick="quickPO(\''+esc(i.code)+'\')">📝 Create PO</button></td></tr>';});
+  $('suggestTbl').innerHTML='<tr><th>Code</th><th>Item</th><th>Suggested Qty</th><th>Action</th></tr>'+
+    (sg||'<tr><td colspan="4">✅ No purchases needed</td></tr>');
+
+  let st='<tr><th>Code</th><th>Item</th><th>Type</th><th>Unit</th><th>Actual Qty</th><th>Committed Qty</th><th>After Commitment</th><th>On Order (PO)</th><th>Ready at Sup.</th><th>Min</th><th>Status</th><th>🔍</th><th></th></tr>';
+  db.items.forEach(i=>{const cm=committedFor(i,C),fr=+(i.onHand-cm).toFixed(2);
+    const stat=fr<0?badge('b-red','SHORTAGE'):fr<i.min?badge('b-amb','LOW'):badge('b-grn','OK');
+    st+='<tr class="'+(fr<0?'rowRed':'')+'"><td>'+(isFG(i.code)?'🏭 ':'')+esc(i.code)+'</td><td>'+esc(i.name)+'</td><td>'+esc(i.cat)+'</td><td>'+esc(i.unit)+'</td>'+
+      '<td contenteditable onblur="editNum(\''+esc(i.code)+'\',\'onHand\',this.textContent)"><b>'+f(i.onHand)+'</b></td>'+
+      '<td><b>'+f(cm)+'</b></td><td class="'+(fr<0?'red':'')+'"><b>'+f(fr)+'</b></td>'+
+      '<td>'+(onOrder[i.code]?f(onOrder[i.code]):'-')+'</td>'+
+      '<td>'+(readyQ[i.code]?'<b style="color:var(--blue)">'+f(readyQ[i.code])+'</b>':'-')+'</td>'+
+      '<td contenteditable onblur="editNum(\''+esc(i.code)+'\',\'min\',this.textContent)">'+f(i.min)+'</td>'+
+      '<td>'+stat+'</td><td><button onclick="toggleDetail(\''+esc(i.code)+'\')">🔍</button></td>'+
+      '<td><button class="danger" onclick="delItem(\''+esc(i.code)+'\')">🗑</button></td></tr>';
+    if(expanded===i.code){
+      const pl=committedBy[i.code],fl=fgBy[i.code];
+      let txt='';
+      if(pl)txt+='🔒 Packaging committed by: '+pl.map(o=>'<b>'+esc(o.so)+'</b> ('+esc(o.code)+') '+f(o.q)+' due '+o.date).join(' &nbsp;|&nbsp; ');
+      if(fl)txt+=(txt?'<br>':'')+'🏭 FG reserved by: '+fl.map(o=>'<b>'+esc(o.so)+'</b> '+f(o.q)+' CTN due '+o.date).join(' &nbsp;|&nbsp; ');
+      st+='<tr class="sub"><td colspan="13">'+(txt||'🔓 No commitment')+'</td></tr>';}});
+  $('stockTbl').innerHTML=st;
+
+  let sh='<tr><th>SO ID</th><th>FG Code</th><th>Description</th><th>Qty</th><th>Due</th><th>Use FG (optional)</th><th>Status</th><th colspan="2">Action</th></tr>';
+  rows.forEach((r,ri)=>{const l=r.l,dl=dLeft(l.date),bu=(db.boms[l.code]||{}).uom||'CTN',fgit=item(l.code);
+    const stat=r.noBom?badge('b-gry','NO BOM'):r.short?badge('b-red','MATERIAL SHORT'):badge('b-grn','READY TO PACK');
+    sh+='<tr'+(r.short?' class="rowRed"':'')+'><td><b>'+esc(l.soId)+'</b></td><td>'+esc(l.code)+'</td>'+
+      '<td>'+esc((db.boms[l.code]||{}).name||l.name||'')+'</td><td>'+f(l.qty)+' '+esc(bu)+'</td>'+
+      '<td>'+l.date+(dl<0?' '+badge('b-red','LATE '+(-dl)+'d'):dl<=3?' '+badge('b-amb',dl+'d left'):'')+'</td>'+
+      '<td>'+(fgit?'<input id="fgi'+ri+'" type="number" min="0" max="'+l.qty+'" step="any" value="'+(r.fu||0)+'" style="width:70px" title="FG in hand: '+f(fgit.onHand)+'">'+
+        '<button onclick="setFG('+ri+')">✔</button> <small class="note">avail '+f(fgit.onHand)+'</small>':'-')+'</td>'+
+      '<td>'+stat+(r.fu>0?' '+badge('b-blu',f(r.fu)+' from FG'):'')+'</td>'+
+      '<td><button class="ok" onclick="completeSO(\''+esc(l.key)+'\')">✅ Completed</button></td>'+
+      '<td><button class="danger" onclick="delSO(\''+esc(l.key)+'\')">✖</button></td></tr>';
+    if(r.fu>0)sh+='<tr class="sub"><td colspan="9">🏭 '+f(r.fu)+' CTN delivered from ready FG stock — packaging committed only for remaining '+f(r.eff)+' CTN</td></tr>';
+    r.comps.forEach(c=>{sh+='<tr class="sub"><td colspan="4" style="padding-left:28px">'+(c.short>0?'🔴':'&nbsp;&nbsp;')+' '+esc(c.itemCode)+' · '+esc(c.name)+'</td>'+
+      '<td colspan="5">Req: <b>'+f(r.eff)+' '+esc(bu)+' × '+f(c.qty)+' = '+f(c.req)+'</b> '+esc(c.unit)+
+      ' · Have: <b>'+f(c.got)+'</b>'+
+      (c.short>0?' <b class="red">⚠ SHORT '+f(c.short)+' → ORDER NOW</b>':' ✓')+'</td></tr>';});});
+  $('soTbl').innerHTML=sh||'<tr><td colspan="9">No open orders — upload Sales Order Excel</td></tr>';
+
+  let ph='<tr><th>PO</th><th>Supplier</th><th>Item</th><th>Qty</th><th>Expected (click to edit)</th><th>Status</th><th colspan="3">Action</th></tr>';
+  db.pos.forEach(p=>{const it=item(p.itemCode),dl=dLeft(p.exp);
+    const stat=p.status==='open'?(dl<0?badge('b-red','OVERDUE '+(-dl)+'d'):dl<=3?badge('b-amb','due '+dl+'d'):badge('b-gry',dl+'d left'))
+      :p.status==='ready'?badge('b-blu','🏭 READY WITH SUPPLIER'):badge('b-gry','received ✔');
+    ph+='<tr'+((p.status!=='recd'&&dl<0)?' class="rowRed"':'')+'><td><b>'+p.id+'</b></td><td>'+esc(p.sup)+'</td>'+
+      '<td>'+esc(p.itemCode)+' · '+(it?esc(it.name):'?')+'</td><td>'+f(p.qty)+'</td>'+
+      '<td><span contenteditable onblur="editPODate(\''+p.id+'\',this.textContent.trim())">'+p.exp+'</span></td>'+
+      '<td>'+stat+'</td>'+
+      (p.status==='open'
+        ?'<td><button class="blu" onclick="poReady(\''+p.id+'\')">🏭 Ready w/ Supplier</button></td>'+
+         '<td><button class="ok" onclick="receivePO(\''+p.id+'\')">📥 Received</button></td>'+
+         '<td><button class="danger" onclick="cancelPO(\''+p.id+'\')">✖</button></td>'
+        :p.status==='ready'
+        ?'<td><button class="ok" onclick="receivePO(\''+p.id+'\')">📥 Received</button></td>'+
+         '<td><button onclick="poReopen(\''+p.id+'\')">↩ Back to Ordered</button></td>'+
+         '<td><button class="danger" onclick="cancelPO(\''+p.id+'\')">✖</button></td>'
+        :'<td colspan="3"></td>')+'</tr>';});
+  $('poTbl').innerHTML=ph||'<tr><td colspan="9">No POs yet</td></tr>';
+
+  $('doneTbl').innerHTML='<tr><th>SO ID</th><th>FG Code</th><th>Qty</th><th>From FG</th><th>Date</th></tr>'+
+    (db.sos.filter(s=>s.status==='done').sort((a,b)=>b.doneTs-a.doneTs)
+     .map(s=>'<tr><td>'+esc(s.soId)+'</td><td>'+esc(s.code)+'</td><td>'+f(s.qty)+'</td><td>'+f(s.fgUsed||0)+'</td><td>'+new Date(s.doneTs).toLocaleDateString()+'</td></tr>').join('')
+     ||'<tr><td colspan="5">None yet</td></tr>');
+  $('logTbl').innerHTML='<tr><th>When</th><th>Event</th></tr>'+
+    db.log.slice(0,80).map(l=>'<tr><td>'+new Date(l.ts).toLocaleString()+'</td><td>'+esc(l.txt)+'</td></tr>').join('');
+
+  renderSups();refreshAlerts();}
+function quickPO(c){switchTab('po');$('poItemTxt').value=c;poPickCode=c;setTimeout(()=>$('poQty').focus(),80);}
+
+/* ============ TABS / IO ============ */
+const tabs=[['dash','📊 Dashboard'],['imp','⬆ Excel Import'],['so','📝 Sales Orders'],['stock','📦 Stock & BOM'],['po','📤 Purchase Orders'],['rep','📑 Reports'],['hist','📜 History']];
+ $('nav').innerHTML=tabs.map(t=>'<button data-t="'+t[0]+'" onclick="switchTab(\''+t[0]+'\')">'+t[1]+'</button>').join('');
+function switchTab(t){tabs.forEach(([k])=>$('tab-'+k).classList.toggle('hide',k!==t));
+  [...document.querySelectorAll('#nav button')].forEach(b=>b.classList.toggle('active',b.dataset.t===t));}
+function exportCSV(){const C=calc();
+  let c='Code,Item,Type,Unit,Actual,Committed,After Commitment,On Order,Ready at Supplier,Min\n';
+  db.items.forEach(i=>{const cm=committedFor(i,C);
+    c+='"'+i.code+'","'+i.name+'",'+i.cat+','+i.unit+','+i.onHand+','+cm+','+(i.onHand-cm)+','+(C.onOrder[i.code]||0)+','+(C.readyQ[i.code]||0)+','+i.min+'\n';});
+  dl('data:text/csv;charset=utf-8,'+encodeURIComponent(c),'packaging_stock_report.csv');}
+function backup(){dl('data:text/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(db,null,1)),'packaging_backup_'+today()+'.json');}
+function restore(inp){const r=new FileReader();r.onload=e=>{try{const d=JSON.parse(e.target.result);
+  if(!d.items||!d.boms)throw 0;db=d;db.lineSeq=db.lineSeq||100;db.sups=db.sups||[];save();init();alert('✔ Restored');}catch{alert('Invalid file');}};r.readAsText(inp.files[0]);inp.value='';}
+function dl(h,n){const a=document.createElement('a');a.href=h;a.download=n;a.click();}
+
+/* ============ DEMO ============ */
+function resetDemo(silent){if(!silent&&!confirm('Replace everything with DEMO data?'))return;
+  const T=Date.now(),D=n=>new Date(T+n*864e5).toISOString().slice(0,10);
+  db={lineSeq:100,manSeq:1,poSeq:1005,items:[],boms:{},sos:[],pos:[],
+    sups:[{name:'RAK Closures LLC',phone:'+971-50-0000001'},{name:'CanPack Industries',phone:'+971-50-0000002'},
+          {name:'PrintHub Labels',phone:'+971-50-0000003'},{name:'PailPro Plastics',phone:''}],
+    log:[{ts:T,txt:'🔄 Demo loaded'}]};
+  [['RM-SEAL36','INDUCTION SEAL VENOL 36 MM (1L) SILICON','Cap',4800,1000],
+   ['RM-CAN1L-G','EMPTY CAN (1L) VENOL FL GREEN PT 150643','Can',5200,1200],
+   ['RM-CTN12X1','EMPTY CTN VENOL (12X1L) UNIVERSAL EB 750 GM','Carton',400,100],
+   ['RM-LB-VMO-FU','LABELS VENOL 0W16 (1L) FU','Label',4200,1000],
+   ['RM-LB-VMO-FD','LABELS VENOL 0W16 (1L) FD','Label',3000,1000],
+   ['RM-LB-VMO-B','LABELS VENOL 0W16 (1L) BACK','Label',2600,1000],
+   ['RM-CAP61','CAP 61 MM (5L)','Cap',25,300],
+   ['RM-CAN5L-BL','EMPTY CAN (5L) VENOL BLUE','Can',350,120],
+   ['RM-CTN4X5','EMPTY CTN (4X5L)','Carton',90,40],
+   ['RM-LB-5L-FA','LABEL FRONT-A VENOL 20W50 5L','Label',380,100],
+   ['RM-LB-5L-FB','LABEL FRONT-B VENOL 20W50 5L','Label',360,100],
+   ['RM-LB-5L-BK','LABEL BACK VENOL 20W50 5L','Label',350,100],
+   ['RM-CAP38','CAP 38 MM (4L)','Cap',640,200],
+   ['RM-CAN4L-BG','EMPTY CAN (4L) BIOGREEN','Can',500,150],
+   ['RM-CTN4X4','EMPTY CTN (4X4L)','Carton',120,40],
+   ['RM-LB-V8-4L','LABEL V8 5W20 4L FRONT','Label',480,120],
+   ['RM-JAR500','GREASE JAR 500 GM GOLD PLASTIC','Can',2600,500],
+   ['RM-LID500','LID 500 GM JAR','Cap',3000,500],
+   ['RM-LB-EP2-F','LABEL EP2 500 GM FRONT','Label',2400,600],
+   ['RM-LB-EP2-B','LABEL EP2 500 GM BACK','Label',2200,600],
+   ['RM-BOX12X500','BOX (12X500 GM)','Carton',260,60],
+   ['RM-PAIL20','PAIL 20 L WHITE','Bucket',340,80],
+   ['RM-LID20','LID 20 L','Cap',320,80],
+   ['RM-DRUM208','DRUM 208 L STEEL','Drum',95,25],
+   ['FG-0521','VENOL M/O 20W50 API SN (4X5L) — READY FG','Product',6,0],
+   ['FG-0213','VENOL M/O 0W16 (12X1L) — READY FG','Product',3,0],
+   ['FG-0658','V8 M/O 5W20 (4X4L) — READY FG','Product',0,0],
+   ['FG-1371','EURO GULF GREASE MP3 (12X500G) — READY FG','Product',0,0]
+  ].forEach(a=>db.items.push({code:a[0],name:a[1],cat:a[2],unit:a[0].startsWith('FG')?'CTN':'pc',onHand:a[3],min:a[4]}));
+  db.boms['FG-0213']={name:'VENOL M/O 0W16 API SP (RC) C5 GF/6B (12X1L)',uom:'CTN',comps:[
+    {itemCode:'RM-SEAL36',qty:12,uom:'PCS'},{itemCode:'RM-CAN1L-G',qty:12,uom:'PCS'},
+    {itemCode:'RM-CTN12X1',qty:1,uom:'PCS'},{itemCode:'RM-LB-VMO-FU',qty:12,uom:'PCS'},
+    {itemCode:'RM-LB-VMO-FD',qty:12,uom:'PCS'},{itemCode:'RM-LB-VMO-B',qty:12,uom:'PCS'},
+    {itemCode:'RM-LIQ-0W16',qty:12,uom:'LITER',excl:true}]};
+  db.boms['FG-0521']={name:'VENOL M/O 20W50 API SN (4X5L)',uom:'CTN',comps:[
+    {itemCode:'RM-CAP61',qty:4,uom:'PCS'},{itemCode:'RM-CAN5L-BL',qty:4,uom:'PCS'},
+    {itemCode:'RM-CTN4X5',qty:1,uom:'PCS'},{itemCode:'RM-LB-5L-FA',qty:4,uom:'PCS'},
+    {itemCode:'RM-LB-5L-FB',qty:4,uom:'PCS'},{itemCode:'RM-LB-5L-BK',qty:4,uom:'PCS'},
+    {itemCode:'RM-LIQ-20W50',qty:20,uom:'LITER',excl:true}]};
+  db.boms['FG-0658']={name:'V8 M/O 5W20 API SP ILSAC GF 6 (4X4L) BIOGREEN',uom:'CTN',comps:[
+    {itemCode:'RM-CAP38',qty:4,uom:'PCS'},{itemCode:'RM-CAN4L-BG',qty:4,uom:'PCS'},
+    {itemCode:'RM-CTN4X4',qty:1,uom:'PCS'},{itemCode:'RM-LB-V8-4L',qty:4,uom:'PCS'},
+    {itemCode:'RM-LIQ-V8',qty:16,uom:'LITER',excl:true}]};
+  db.boms['FG-1371']={name:'EURO GULF GREASE CALCIUM MP3/EP3 (12X500GM) PLASTIC GOLD',uom:'CTN',comps:[
+    {itemCode:'RM-JAR500',qty:12,uom:'PCS'},{itemCode:'RM-LID500',qty:12,uom:'PCS'},
+    {itemCode:'RM-LB-EP2-F',qty:12,uom:'PCS'},{itemCode:'RM-LB-EP2-B',qty:12,uom:'PCS'},
+    {itemCode:'RM-BOX12X500',qty:1,uom:'PCS'},{itemCode:'RM-SEM-GREASE',qty:6,uom:'KG',excl:true}]};
+  db.sos=[
+   {key:'GE-SO-2026-0935~FG-0521~101',soId:'GE-SO-2026-0935',code:'FG-0521',date:D(2),qty:10,fgUsed:6,ts:T-3e8,status:'open'},
+   {key:'GE-SO-2026-0935~FG-0213~102',soId:'GE-SO-2026-0935',code:'FG-0213',date:D(2),qty:5,ts:T-3e8,status:'open'},
+   {key:'GE-SO-2026-0942~FG-0658~103',soId:'GE-SO-2026-0942',code:'FG-0658',date:D(6),qty:8,ts:T-2e8,status:'open'},
+   {key:'GE-SO-2026-0942~FG-1371~104',soId:'GE-SO-2026-0942',code:'FG-1371',date:D(6),qty:15,ts:T-2e8,status:'open'}];
+  db.pos=[
+   {id:'PO-1001',sup:'RAK Closures LLC',itemCode:'RM-CAP61',qty:500,exp:D(-2),status:'open'},
+   {id:'PO-1002',sup:'CanPack Industries',itemCode:'RM-CAN1L-G',qty:2880,exp:D(5),status:'open'},
+   {id:'PO-1003',sup:'PrintHub Labels',itemCode:'RM-LB-VMO-FU',qty:2000,exp:D(9),status:'open'},
+   {id:'PO-1004',sup:'PailPro Plastics',itemCode:'RM-PAIL20',qty:200,exp:D(1),status:'ready'}];
+  db.items.push({code:'RM-LIQ-0W16',name:'VENOL LIQ M/O 0W16 API SP',cat:'Other',unit:'LITER',onHand:0,min:0},
+    {code:'RM-LIQ-20W50',name:'VENOL LIQ M/O 20W50 API SN',cat:'Other',unit:'LITER',onHand:0,min:0},
+    {code:'RM-LIQ-V8',name:'V8 LIQ M/O 5W20 API SP',cat:'Other',unit:'LITER',onHand:0,min:0},
+    {code:'RM-SEM-GREASE',name:'GREASE CALCIUM MP3/EP3 SEMI',cat:'Other',unit:'KG',onHand:0,min:0});
+  save();if(!silent)init();}
+function init(){fillSelects();initCombos();renderRepBtns();renderBOM();switchTab('dash');render();}
+function fillSelects(){
+  const fgs=Object.keys(db.boms);
+  const cur=$('bomProdTxt').dataset.code;
+  if(cur&&fgs.includes(cur)){$('bomProdTxt').value=cur;}}
+function boot(){
+  $('poExp').min=today();
+  try{
+    firebase.initializeApp(FB_CONFIG);
+    rtdb=firebase.database().ref('packagingApp');
+    rtdb.once('value').then(s=>{
+      const v=s.val();
+      if(v&&v.items&&v.items.length)db=v;   /* cloud wins on load */
+      else rtdb.set(db);                    /* first run: push local */
+      db.lineSeq=db.lineSeq||100;db.manSeq=db.manSeq||1;db.poSeq=db.poSeq||1001;db.sups=db.sups||[];
+      cloudReady=true;
+      $('cloudState').innerHTML='☁️ Live — packaging-planner';
+      save();init();
+      rtdb.on('value',s2=>{
+        if(mute||!s2)return;const v2=s2.val();
+        if(!v2||!v2.items)return;
+        db=v2;db.lineSeq=db.lineSeq||100;db.manSeq=db.manSeq||1;db.poSeq=db.poSeq||1001;db.sups=db.sups||[];
+        fillSelects();renderBOM();render();
+      });
+    }).catch(err=>{$('cloudState').innerHTML='⚠️ Cloud error — check DB rules';console.error(err);init();});
+  }catch(err){$('cloudState').innerHTML='⚠️ Cloud error — Local mode';console.error(err);init();}
+}
+boot();
+</script>
+</body>
+</html>
