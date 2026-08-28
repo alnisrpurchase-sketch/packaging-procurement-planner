@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Al Nisr Packaging Procurement Planner</title>
+<title>Packaging Procurement Planner</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -30,12 +30,12 @@ input,select{padding:7px;border:1px solid #dadce0;border-radius:5px;margin:3px 6
 label{font-size:12px;color:#5f6368}
 button{background:#5b3a1e;color:#fff;border:none;padding:7px 12px;border-radius:5px;cursor:pointer;margin:3px 3px 3px 0;font-size:13px}
 button:hover{opacity:.88}.danger{background:var(--red)}.ok{background:var(--green)}.blue{background:#155a86}.blu{background:var(--blue)}
-/* ===== TABLES: fit width, wrap text, sticky header ===== */
 table{width:100%;border-collapse:separate;border-spacing:0;background:#fff;border-radius:8px;overflow:hidden;
   box-shadow:0 1px 3px rgba(0,0,0,.12);font-size:var(--tblfs);margin-bottom:8px;table-layout:auto}
 th{background:#5b3a1e;color:#fff;padding:8px 6px;text-align:left;white-space:nowrap;
-  position:sticky;top:0;z-index:20;box-shadow:0 1px 0 rgba(255,255,255,.25) inset}
+  position:sticky;top:0;z-index:20}
 td{padding:var(--tdpad) 6px;border-bottom:1px solid #ecedef;white-space:normal;word-break:break-word;vertical-align:middle}
+td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .tblWrap{overflow:visible}
 .badge{padding:2px 9px;border-radius:10px;color:#fff;font-size:11px;font-weight:600;display:inline-block}
 .b-red{background:var(--red)}.b-amb{background:var(--amber)}.b-grn{background:var(--green)}.b-gry{background:#80868b}.b-blu{background:var(--blue)}
@@ -59,7 +59,6 @@ tr.sub td{background:#fffbe6!important;font-size:.95em}
 .comboWrap.slim{min-width:210px}
 .repBtns button{margin:4px}
 body.compact{--tdpad:3px;--tblfs:12px}
-/* ===== MOBILE: stacked cards ===== */
 @media(max-width:1100px){
   main{padding:10px}
   header{padding:10px}
@@ -94,11 +93,11 @@ body.compact{--tdpad:3px;--tblfs:12px}
 </head>
 <body>
 <header>
-  <h1>📦Al Nisr Packaging Procurement Planner</h1>
+  <h1>📦 Packaging Procurement Planner</h1>
   <span id="tblCtl">
     <button onclick="tblZoom(-1)" title="smaller tables">A−</button>
-    <button onclick="tblZoom(0)" title="reset size">A</button>
-    <button onclick="tblZoom(1)" title="bigger tables">A+</button>
+    <button onclick="tblZoom(0)" title="reset">A</button>
+    <button onclick="tblZoom(1)" title="bigger">A+</button>
     <button onclick="toggleCompact()" title="compact rows">▤</button>
   </span>
   <span id="cloudState">💾 Local mode</span>
@@ -158,7 +157,7 @@ body.compact{--tdpad:3px;--tblfs:12px}
     <label>Delivery Due</label><input id="soDate" type="date" required>
     <button>Add & Commit</button>
   </form>
-  <h2 class="sec">📋 Open Orders <small class="note">— optional: take qty from READY FG stock (set "Use FG")</small></h2>
+  <h2 class="sec">📋 Open Orders — compact grid <small class="note">(CAN/CTN/LBL from BOM · click 🔍 for full component detail)</small></h2>
   <div class="tblWrap"><table id="soTbl"></table></div>
 </section>
 
@@ -255,12 +254,11 @@ const CLOUD_ON=true;
 
 const $=id=>document.getElementById(id);
 const KEY='pkgMRPxl';
-let db=null,expanded=null,poPickCode='',soPickCode='',saveT=null,mute=false,cloudReady=false,rtdb=null,curRep=null;
+let db=null,expanded=null,expandedSo=null,poPickCode='',soPickCode='',saveT=null,mute=false,cloudReady=false,rtdb=null,curRep=null;
 try{db=JSON.parse(localStorage.getItem(KEY))}catch(e){}
 if(!db||!db.items)resetDemo(true);
 db.lineSeq=db.lineSeq||100;db.manSeq=db.manSeq||1;db.poSeq=db.poSeq||1001;db.sups=db.sups||[];
 
-/* ===== TABLE SIZE CONTROL (remembered) ===== */
 let tblState={z:0,c:false};
 try{tblState=Object.assign(tblState,JSON.parse(localStorage.getItem('tblState')||'{}'))}catch(e){}
 function applyTbl(){
@@ -332,6 +330,13 @@ function calc(){
   return{committed,committedBy,onOrder,readyQ,fgC,fgBy,rows};
 }
 function committedFor(i,calcRes){return isFG(i.code)?(calcRes.fgC[i.code]||0):(calcRes.committed[i.code]||0);}
+
+/* === aggregate BOM comps by category (Can / Carton / Label) for compact SO grid === */
+function aggCat(comps,eff,type){
+  let req=0,avl=0,names=[];
+  (comps||[]).forEach(c=>{if(c.excl)return;const it=item(c.itemCode);
+    if(it&&it.cat===type){req+=c.qty*eff;avl+=+it.onHand;names.push(it.code+' · '+it.name);}});
+  return{req:+req.toFixed(2),avl:+avl.toFixed(2),names};}
 
 /* ============ COMBOBOX ============ */
 function combo(input,box,getData,onPick){
@@ -696,6 +701,20 @@ const REPORTS=[
     rows:c.rows.map(r=>[r.l.soId,r.l.code,(db.boms[r.l.code]||{}).name||'',r.l.qty,r.fu||0,r.eff,r.l.date,
       dLeft(r.l.date),r.noBom?'NO BOM':r.short?'MATERIAL SHORT':'READY TO PACK']),
     file:'report_open_sales_orders'};}],
+ ['sogrid','📋 SO Grid (CAN/CTN/LBL like Excel)',()=>{
+   const c=calc();const out=[];
+   c.rows.forEach(r=>{const l=r.l,eff=r.eff,b=db.boms[l.code];
+     const can=b?aggCat(b.comps,eff,'Can'):{req:0,avl:0},ctn=b?aggCat(b.comps,eff,'Carton'):{req:0,avl:0},lbl=b?aggCat(b.comps,eff,'Label'):{req:0,avl:0};
+     const sh=[];
+     if(can.req>can.avl)sh.push('CAN −'+f(can.req-can.avl));
+     if(ctn.req>ctn.avl)sh.push('CTN −'+f(ctn.req-ctn.avl));
+     if(lbl.req>lbl.avl)sh.push('LBL −'+f(lbl.req-lbl.avl));
+     out.push([l.soId,l.code,(b||{}).name||'',l.qty,
+       f(can.req),f(can.avl),f(ctn.req),f(ctn.avl),f(lbl.req),f(lbl.avl),
+       sh.length?'SHORTAGE: '+sh.join(', '):'OK — surplus after order']);
+   });
+   return{head:['SO ID','FG Code','Description','Req FG','Req Can','Avail Can','Req Ctn','Avail Ctn','Req Label','Avail Label','Remark'],
+    rows:out,file:'report_so_grid'};}],
  ['done','✅ Completed Orders',()=>{
    return{head:['SO ID','FG Code','Qty CTN','From FG','Completed On'],
     rows:db.sos.filter(s=>s.status==='done').sort((a,b)=>b.doneTs-a.doneTs)
@@ -734,6 +753,7 @@ function refreshAlerts(){const c=calc(),agg={};
 /* ============ RENDER ============ */
 function badge(c,t){return'<span class="badge '+c+'">'+t+'</span>';}
 function toggleDetail(c){expanded=expanded===c?null:c;render();}
+function toggleSo(k){expandedSo=expandedSo===k?null:k;render();}
 function render(){const C=calc();const{committed,committedBy,onOrder,readyQ,fgC,fgBy,rows}=C;
   let shorts=0,lows=0;
   db.items.forEach(i=>{const cm=committedFor(i,C);
@@ -751,8 +771,8 @@ function render(){const C=calc();const{committed,committedBy,onOrder,readyQ,fgC,
   let sr='';
   db.items.forEach(i=>{const cm=committedFor(i,C);
     if(cm>i.onHand)sr+='<tr class="rowRed"><td data-l="Code">'+esc(i.code)+'</td><td data-l="Item">'+esc(i.name)+'</td>'+
-      '<td data-l="Actual">'+f(i.onHand)+'</td><td data-l="Committed" class="red">'+f(cm)+'</td>'+
-      '<td data-l="After Cmt." class="red">'+f(i.onHand-cm)+'</td><td data-l="With Supplier">'+
+      '<td data-l="Actual" class="num">'+f(i.onHand)+'</td><td data-l="Committed" class="num red">'+f(cm)+'</td>'+
+      '<td data-l="After Cmt." class="num red">'+f(i.onHand-cm)+'</td><td data-l="With Supplier">'+
       ((onOrder[i.code]||readyQ[i.code])?
         (onOrder[i.code]?f(onOrder[i.code])+' ordered':'')+(onOrder[i.code]&&readyQ[i.code]?' + ':'')+(readyQ[i.code]?f(readyQ[i.code])+' ready ✔':'')
         :'❌ none — RAISE PO')+'</td></tr>';});
@@ -773,12 +793,12 @@ function render(){const C=calc();const{committed,committedBy,onOrder,readyQ,fgC,
     const stat=fr<0?badge('b-red','SHORTAGE'):fr<i.min?badge('b-amb','LOW'):badge('b-grn','OK');
     st+='<tr class="'+(fr<0?'rowRed':'')+'"><td data-l="Code">'+(isFG(i.code)?'🏭 ':'')+esc(i.code)+'</td>'+
       '<td data-l="Item">'+esc(i.name)+'</td><td data-l="Type">'+esc(i.cat)+'</td><td data-l="Unit">'+esc(i.unit)+'</td>'+
-      '<td data-l="Actual" contenteditable onblur="editNum(\''+esc(i.code)+'\',\'onHand\',this.textContent)"><b>'+f(i.onHand)+'</b></td>'+
-      '<td data-l="Committed"><b>'+f(cm)+'</b></td>'+
-      '<td data-l="After Cmt." class="'+(fr<0?'red':'')+'"><b>'+f(fr)+'</b></td>'+
-      '<td data-l="On Order">'+(onOrder[i.code]?f(onOrder[i.code]):'-')+'</td>'+
-      '<td data-l="Ready at Sup.">'+(readyQ[i.code]?'<b style="color:var(--blue)">'+f(readyQ[i.code])+'</b>':'-')+'</td>'+
-      '<td data-l="Min" contenteditable onblur="editNum(\''+esc(i.code)+'\',\'min\',this.textContent)">'+f(i.min)+'</td>'+
+      '<td data-l="Actual" class="num" contenteditable onblur="editNum(\''+esc(i.code)+'\',\'onHand\',this.textContent)"><b>'+f(i.onHand)+'</b></td>'+
+      '<td data-l="Committed" class="num"><b>'+f(cm)+'</b></td>'+
+      '<td data-l="After Cmt." class="num '+(fr<0?'red':'')+'"><b>'+f(fr)+'</b></td>'+
+      '<td data-l="On Order" class="num">'+(onOrder[i.code]?f(onOrder[i.code]):'-')+'</td>'+
+      '<td data-l="Ready at Sup." class="num">'+(readyQ[i.code]?'<b style="color:var(--blue)">'+f(readyQ[i.code])+'</b>':'-')+'</td>'+
+      '<td data-l="Min" class="num" contenteditable onblur="editNum(\''+esc(i.code)+'\',\'min\',this.textContent)">'+f(i.min)+'</td>'+
       '<td data-l="Status">'+stat+'</td>'+
       '<td class="act" data-l="Action"><button onclick="toggleDetail(\''+esc(i.code)+'\')">🔍</button>'+
       '<button class="danger" onclick="delItem(\''+esc(i.code)+'\')">🗑</button></td></tr>';
@@ -790,26 +810,55 @@ function render(){const C=calc();const{committed,committedBy,onOrder,readyQ,fgC,
       st+='<tr class="sub"><td colspan="12">'+(txt||'🔓 No commitment')+'</td></tr>';}});
   $('stockTbl').innerHTML=st;
 
-  let sh='<thead><tr><th>SO ID</th><th>FG Code</th><th>Description</th><th>Qty</th><th>Due</th><th>Use FG</th><th>Status</th><th>Action</th></tr></thead>';
+  /* ===== COMPACT SO GRID — one row per line, CAN/CTN/LBL aggregated from BOM ===== */
+  let sh='<thead><tr><th>SO ID</th><th>FG Code</th><th>Description</th><th>Req FG</th><th>Due</th>'+
+   '<th>Req Can</th><th>Avail Can</th><th>Req Ctn</th><th>Avail Ctn</th><th>Req Lbl</th><th>Avail Lbl</th>'+
+   '<th>Remark</th><th>Use FG</th><th>Action</th></tr></thead>';
   rows.forEach((r,ri)=>{const l=r.l,dl=dLeft(l.date),bu=(db.boms[l.code]||{}).uom||'CTN',fgit=item(l.code);
-    const stat=r.noBom?badge('b-gry','NO BOM'):r.short?badge('b-red','MATERIAL SHORT'):badge('b-grn','READY TO PACK');
-    sh+='<tr'+(r.short?' class="rowRed"':'')+'><td data-l="SO ID"><b>'+esc(l.soId)+'</b></td>'+
+    const b=db.boms[l.code];
+    const can=b?aggCat(b.comps,r.eff,'Can'):{req:0,avl:0,names:[]};
+    const ctn=b?aggCat(b.comps,r.eff,'Carton'):{req:0,avl:0,names:[]};
+    const lbl=b?aggCat(b.comps,r.eff,'Label'):{req:0,avl:0,names:[]};
+    /* remark: shortage or surplus after this order */
+    const shp=[];
+    if(can.req>can.avl)shp.push('CAN −'+f(can.req-can.avl));
+    if(ctn.req>ctn.avl)shp.push('CTN −'+f(ctn.req-ctn.avl));
+    if(lbl.req>lbl.avl)shp.push('LBL −'+f(lbl.req-lbl.avl));
+    r.comps.forEach(c=>{const it=item(c.itemCode);
+      if(it&&['Cap','Bucket','Drum','Other'].includes(it.cat)&&c.short>0)shp.push(esc(it.cat).toUpperCase()+' −'+f(c.short));});
+    const surplus=[];
+    if(can.avl>can.req)surplus.push('CAN +'+f(can.avl-can.req));
+    if(ctn.avl>ctn.req)surplus.push('CTN +'+f(ctn.avl-ctn.req));
+    if(lbl.avl>lbl.req)surplus.push('LBL +'+f(lbl.avl-lbl.req));
+    const remark=r.noBom?'<span class="badge b-gry">NO BOM</span>'
+      :shp.length?'<b class="red">⚠ SHORTAGE: '+shp.join(' · ')+'</b><br><small class="note">→ ORDER NOW</small>'
+      :'<b style="color:var(--green)">✅ OK</b>'+(surplus.length?' <small class="note">surplus: '+surplus.join(' · ')+' after this order</small>':'');
+    sh+='<tr'+(shp.length?' class="rowRed"':'')+'>'+
+      '<td data-l="SO ID"><b>'+esc(l.soId)+'</b></td>'+
       '<td data-l="FG Code">'+esc(l.code)+'</td>'+
-      '<td data-l="Description">'+esc((db.boms[l.code]||{}).name||l.name||'')+'</td>'+
-      '<td data-l="Qty">'+f(l.qty)+' '+esc(bu)+'</td>'+
-      '<td data-l="Due">'+l.date+(dl<0?' '+badge('b-red','LATE '+(-dl)+'d'):dl<=3?' '+badge('b-amb',dl+'d left'):'')+'</td>'+
-      '<td data-l="Use FG (avail '+f(fgit?fgit.onHand:0)+')">'+(fgit?'<input id="fgi'+ri+'" type="number" min="0" max="'+l.qty+'" step="any" value="'+(r.fu||0)+'" style="width:64px">'+
+      '<td data-l="Description">'+esc((b||{}).name||l.name||'')+'</td>'+
+      '<td data-l="Req FG" class="num"><b>'+f(l.qty)+'</b> '+esc(bu)+(r.fu>0?'<br><small class="note" style="color:var(--blue)">'+f(r.fu)+' FG + '+f(r.eff)+' prod</small>':'')+'</td>'+
+      '<td data-l="Due">'+l.date+(dl<0?' '+badge('b-red','LATE '+(-dl)+'d'):dl<=3?' '+badge('b-amb',dl+'d'):'')+'</td>'+
+      '<td data-l="Req Can" class="num" title="'+esc((can.names||[]).join(' | '))+'">'+f(can.req)+'</td>'+
+      '<td data-l="Avail Can" class="num '+(can.req>can.avl?'red':'')+'" title="'+esc((can.names||[]).join(' | '))+'"><b>'+f(can.avl)+'</b></td>'+
+      '<td data-l="Req Ctn" class="num">'+f(ctn.req)+'</td>'+
+      '<td data-l="Avail Ctn" class="num '+(ctn.req>ctn.avl?'red':'')+'"><b>'+f(ctn.avl)+'</b></td>'+
+      '<td data-l="Req Lbl" class="num">'+f(lbl.req)+'</td>'+
+      '<td data-l="Avail Lbl" class="num '+(lbl.req>lbl.avl?'red':'')+'"><b>'+f(lbl.avl)+'</b></td>'+
+      '<td data-l="Remark">'+remark+'</td>'+
+      '<td data-l="Use FG">'+(fgit?'<input id="fgi'+ri+'" type="number" min="0" max="'+l.qty+'" step="any" value="'+(r.fu||0)+'" style="width:60px" title="FG ready stock: '+f(fgit.onHand)+'">'+
         '<button onclick="setFG('+ri+')">✔</button>':'-')+'</td>'+
-      '<td data-l="Status">'+stat+(r.fu>0?' '+badge('b-blu',f(r.fu)+' FG'):'')+'</td>'+
       '<td class="act" data-l="Action">'+
-      '<button class="ok" onclick="completeSO(\''+esc(l.key)+'\')">✅ Completed</button>'+
+      '<button onclick="toggleSo(\''+esc(l.key)+'\')" title="full component detail">🔍</button>'+
+      '<button class="ok" onclick="completeSO(\''+esc(l.key)+'\')">✅</button>'+
       '<button class="danger" onclick="delSO(\''+esc(l.key)+'\')">✖</button></td></tr>';
-    if(r.fu>0)sh+='<tr class="sub"><td colspan="8">🏭 '+f(r.fu)+' CTN from ready FG stock — packaging committed only for remaining '+f(r.eff)+' CTN</td></tr>';
-    r.comps.forEach(c=>{sh+='<tr class="sub"><td colspan="4" data-l="Component">'+(c.short>0?'🔴 ':'')+esc(c.itemCode)+' · '+esc(c.name)+'</td>'+
-      '<td colspan="4" data-l="Requirement">Req: <b>'+f(r.eff)+' '+esc(bu)+' × '+f(c.qty)+' = '+f(c.req)+'</b> '+esc(c.unit)+
-      ' · Have: <b>'+f(c.got)+'</b>'+
-      (c.short>0?' <b class="red">⚠ SHORT '+f(c.short)+' → ORDER NOW</b>':' ✓')+'</td></tr>';});});
-  $('soTbl').innerHTML=sh||'<tr><td colspan="8">No open orders — upload Sales Order Excel</td></tr>';
+    if(expandedSo===l.key){
+      sh+='<tr class="sub"><td colspan="14"><b>Full component detail — '+esc(l.soId)+' / '+esc(l.code)+' (producing '+f(r.eff)+' '+esc(bu)+'):</b><br>'+
+        (r.comps.length?r.comps.map(c=>esc(c.itemCode)+' · '+esc(c.name)+' → Req <b>'+f(c.req)+'</b> · Have <b>'+f(c.got)+'</b> '+esc(c.unit)+
+          (c.short>0?' <b class="red">⚠ SHORT '+f(c.short)+'</b>':' ✓')).join('<br>')
+        :'— (all delivered from ready FG)')+'</td></tr>';}
+  });
+  $('soTbl').innerHTML=sh||'<tr><td colspan="14">No open orders — upload Sales Order Excel</td></tr>';
 
   let ph='<thead><tr><th>PO</th><th>Supplier</th><th>Item</th><th>Qty</th><th>Expected (click to edit)</th><th>Status</th><th>Action</th></tr></thead>';
   db.pos.forEach(p=>{const it=item(p.itemCode),dl=dLeft(p.exp);
@@ -818,7 +867,7 @@ function render(){const C=calc();const{committed,committedBy,onOrder,readyQ,fgC,
     ph+='<tr'+((p.status!=='recd'&&dl<0)?' class="rowRed"':'')+'><td data-l="PO"><b>'+p.id+'</b></td>'+
       '<td data-l="Supplier">'+esc(p.sup)+'</td>'+
       '<td data-l="Item">'+esc(p.itemCode)+' · '+(it?esc(it.name):'?')+'</td>'+
-      '<td data-l="Qty">'+f(p.qty)+'</td>'+
+      '<td data-l="Qty" class="num">'+f(p.qty)+'</td>'+
       '<td data-l="Expected"><span contenteditable onblur="editPODate(\''+p.id+'\',this.textContent.trim())">'+p.exp+'</span></td>'+
       '<td data-l="Status">'+stat+'</td>'+
       '<td class="act" data-l="Action">'+
@@ -836,7 +885,7 @@ function render(){const C=calc();const{committed,committedBy,onOrder,readyQ,fgC,
   $('doneTbl').innerHTML='<thead><tr><th>SO ID</th><th>FG Code</th><th>Qty</th><th>From FG</th><th>Date</th></tr></thead>'+
     (db.sos.filter(s=>s.status==='done').sort((a,b)=>b.doneTs-a.doneTs)
      .map(s=>'<tr><td data-l="SO ID">'+esc(s.soId)+'</td><td data-l="FG Code">'+esc(s.code)+'</td>'+
-      '<td data-l="Qty">'+f(s.qty)+'</td><td data-l="From FG">'+f(s.fgUsed||0)+'</td>'+
+      '<td data-l="Qty" class="num">'+f(s.qty)+'</td><td data-l="From FG" class="num">'+f(s.fgUsed||0)+'</td>'+
       '<td data-l="Date">'+new Date(s.doneTs).toLocaleDateString()+'</td></tr>').join('')
      ||'<tr><td colspan="5">None yet</td></tr>');
   $('logTbl').innerHTML='<thead><tr><th>When</th><th>Event</th></tr></thead>'+
