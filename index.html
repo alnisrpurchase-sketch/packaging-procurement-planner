@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AL Nisr Packaging Procurement Planner</title>
+<title>Packaging Procurement Planner</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -32,11 +32,9 @@ button{background:#5b3a1e;color:#fff;border:none;padding:7px 12px;border-radius:
 button:hover{opacity:.88}.danger{background:var(--red)}.ok{background:var(--green)}.blue{background:#155a86}.blu{background:var(--blue)}
 table{width:100%;border-collapse:separate;border-spacing:0;background:#fff;border-radius:8px;overflow:hidden;
   box-shadow:0 1px 3px rgba(0,0,0,.12);font-size:var(--tblfs);margin-bottom:8px;table-layout:auto}
-th{background:#5b3a1e;color:#fff;padding:8px 6px;text-align:left;white-space:nowrap;
-  position:sticky;top:0;z-index:20}
+th{background:#5b3a1e;color:#fff;padding:8px 6px;text-align:left;white-space:nowrap;position:sticky;top:0;z-index:20}
 td{padding:var(--tdpad) 6px;border-bottom:1px solid #ecedef;white-space:normal;word-break:break-word;vertical-align:middle}
 td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.tblWrap{overflow:visible}
 .badge{padding:2px 9px;border-radius:10px;color:#fff;font-size:11px;font-weight:600;display:inline-block}
 .b-red{background:var(--red)}.b-amb{background:var(--amber)}.b-grn{background:var(--green)}.b-gry{background:#80868b}.b-blu{background:var(--blue)}
 td.red,tr.rowRed td:first-child{color:var(--red)}
@@ -58,6 +56,9 @@ tr.sub td{background:#fffbe6!important;font-size:.95em}
 .opt.none{color:#80868b;cursor:default}
 .comboWrap.slim{min-width:210px}
 .repBtns button{margin:4px}
+.searchBar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:8px}
+.searchBar input{min-width:280px;flex:1;max-width:420px}
+.searchBar select{max-width:180px}
 body.compact{--tdpad:3px;--tblfs:12px}
 @media(max-width:1100px){
   main{padding:10px}
@@ -82,6 +83,7 @@ body.compact{--tdpad:3px;--tblfs:12px}
   td .comboWrap{flex:1;min-width:0}
   [contenteditable]{min-width:0}
   tr.rowRed td:first-child{box-shadow:none;border-left:5px solid var(--red);border-radius:6px 0 0 6px}
+  .searchBar input{max-width:100%}
   .repBtns button{margin:2px}
 }
 @media(max-width:480px){
@@ -93,12 +95,12 @@ body.compact{--tdpad:3px;--tblfs:12px}
 </head>
 <body>
 <header>
-  <h1>📦Al Nisr Packaging Procurement Planner</h1>
+  <h1>📦 Packaging Procurement Planner</h1>
   <span id="tblCtl">
-    <button onclick="tblZoom(-1)" title="smaller tables">A−</button>
-    <button onclick="tblZoom(0)" title="reset">A</button>
-    <button onclick="tblZoom(1)" title="bigger">A+</button>
-    <button onclick="toggleCompact()" title="compact rows">▤</button>
+    <button onclick="tblZoom(-1)">A−</button>
+    <button onclick="tblZoom(0)">A</button>
+    <button onclick="tblZoom(1)">A+</button>
+    <button onclick="toggleCompact()">▤</button>
   </span>
   <span id="cloudState">💾 Local mode</span>
   <nav id="nav"></nav>
@@ -118,10 +120,9 @@ body.compact{--tdpad:3px;--tblfs:12px}
 <!-- ===== EXCEL IMPORT ===== -->
 <section id="tab-imp" class="hide">
   <div class="panel">
-    <h3>1️⃣ Items Master <small class="note">(all cans, caps, labels, cartons, buckets, drums + FG stock)</small></h3>
+    <h3>1️⃣ Items Master <small class="note">(cans, caps, labels, cartons, buckets, drums, FG)</small></h3>
     <button class="blue" onclick="tpl('items')">⬇ Blank Template</button>
-    <button class="blue" onclick="dummy('items')">⬇ Dummy Items</button>
-    <div class="drop">Columns: <b>Code | Name | Type | Unit | Stock | Min Level</b></div>
+    <div class="drop">Columns: <b>Code | Name | Type | Unit | Stock | Min Level</b> — re-upload updates existing codes</div>
     <input type="file" accept=".xlsx,.xls,.csv" class="hide" id="fItems" onchange="impFile(this,'items')">
     <button onclick="$('fItems').click()">📂 Upload Items Excel</button>
     <div class="rep" id="repItems"></div>
@@ -129,7 +130,6 @@ body.compact{--tdpad:3px;--tblfs:12px}
   <div class="panel">
     <h3>2️⃣ BOM per Finished Good <small class="note">(FG code on first row, components below)</small></h3>
     <button class="blue" onclick="tpl('bom')">⬇ Blank Template</button>
-    <button class="blue" onclick="dummy('bom')">⬇ Dummy BOM</button>
     <div class="drop">All quantities <b>per 1 carton</b>. Liquid rows (LITER/KG) auto-excluded.</div>
     <input type="file" accept=".xlsx,.xls,.csv" class="hide" id="fBom" onchange="impFile(this,'bom')">
     <button onclick="$('fBom').click()">📂 Upload BOM Excel</button>
@@ -138,7 +138,6 @@ body.compact{--tdpad:3px;--tblfs:12px}
   <div class="panel">
     <h3>3️⃣ Sales Orders <small class="note">(Qty = cartons)</small></h3>
     <button class="blue" onclick="tpl('so')">⬇ Blank Template</button>
-    <button class="blue" onclick="dummy('so')">⬇ Dummy Sales Order</button>
     <div class="drop">Columns: <b>ID | Date | Quantity | Item Code (FG) | Item Name</b></div>
     <input type="file" accept=".xlsx,.xls,.csv" class="hide" id="fSo" onchange="impFile(this,'so')">
     <button onclick="$('fSo').click()">📂 Upload Sales Order Excel</button>
@@ -157,7 +156,7 @@ body.compact{--tdpad:3px;--tblfs:12px}
     <label>Delivery Due</label><input id="soDate" type="date" required>
     <button>Add & Commit</button>
   </form>
-  <h2 class="sec">📋 Open Orders — compact grid <small class="note">(CAN/CTN/LBL from BOM · click 🔍 for full component detail)</small></h2>
+  <h2 class="sec">📋 Open Orders — compact grid <small class="note">(CAN/CTN/LBL from BOM · 🔍 = full component detail)</small></h2>
   <div class="tblWrap"><table id="soTbl"></table></div>
 </section>
 
@@ -169,10 +168,19 @@ body.compact{--tdpad:3px;--tblfs:12px}
     <button onclick="backup()">💾 Backup</button>
     <button onclick="$('impFile2').click()">📂 Restore</button>
     <input type="file" id="impFile2" accept=".json" class="hide" onchange="restore(this)">
-    <button class="danger" onclick="resetDemo(false)">↺ Load Demo</button>
+    <button class="danger" onclick="cleanDemo()">🧹 Remove Demo Data</button>
   </div><br>
-  <h2 class="sec">📦 Stock — Packaging + FG — Actual vs Committed</h2>
-  <small class="note">Yellow cells editable. 🔍 = which orders committed. 🏭 rows are Finished Goods.</small><br><br>
+  <h2 class="sec">📦 Stock — search & filter <small class="note">(only matching items load → fast with 10,000+ items)</small></h2>
+  <div class="searchBar">
+    <input id="stockQ" placeholder="🔍 type code / name / group… e.g.  rm can venol   |   fg   |   label" autocomplete="off">
+    <select id="stockCat"><option value="">All types</option></select>
+    <button onclick="stockPage=0;renderStock(lastC)">Search</button>
+    <button onclick="$('stockQ').value='';$('stockCat').value='';stockPage=0;renderStock(lastC)">✖ Clear</button>
+    <span id="stockCount" class="note"></span>
+    <button onclick="stockPage--;renderStock(lastC)">‹ Prev</button>
+    <button onclick="stockPage++;renderStock(lastC)">Next ›</button>
+  </div>
+  <small class="note">Tip: multiple words = all must match. "rm can venol" finds every VENOL can · type <b>Product</b> = all FG · Yellow cells editable · 🔍 = commitments</small><br><br>
   <div class="tblWrap"><table id="stockTbl"></table></div><br>
   <form onsubmit="addItem(event)">
     <h3>+ Add Item (packaging or FG)</h3>
@@ -185,7 +193,7 @@ body.compact{--tdpad:3px;--tblfs:12px}
     <button>Add</button>
   </form><br>
   <div class="panel">
-    <h3>🏭 Finished Goods & BOM <small class="note">(type in component box to search)</small></h3>
+    <h3>🏭 Finished Goods & BOM <small class="note">(type in box to search FG)</small></h3>
     <div class="comboWrap slim"><input id="bomProdTxt" autocomplete="off" placeholder="type FG code / name…"><div class="opts" id="bomProdBox"></div></div>
     <button type="button" onclick="newProduct()">➕ New FG</button>
     <div id="bomEditor" style="margin-top:10px"></div>
@@ -250,13 +258,23 @@ const FB_CONFIG={
   messagingSenderId:"297471285522",
   appId:"1:297471285522:web:284ecf033f4ce37b8f3bcb"
 };
-const CLOUD_ON=true;
 
 const $=id=>document.getElementById(id);
 const KEY='pkgMRPxl';
-let db=null,expanded=null,expandedSo=null,poPickCode='',soPickCode='',saveT=null,mute=false,cloudReady=false,rtdb=null,curRep=null;
+let db=null,expanded=null,expandedSo=null,poPickCode='',soPickCode='',saveT=null,mute=false,cloudReady=false,rtdb=null,curRep=null,lastC=null;
+
+/* ============ SPEED: item hash index + option caches ============ */
+let itemIdx=new Map(),itemOptCache=null,fgOptCache=null;
+function reindex(){itemIdx=new Map();db.items.forEach(i=>itemIdx.set(i.code,i));itemOptCache=null;fgOptCache=null;}
+function item(c){return itemIdx.get(c)||null;}
+function addItemObj(o){db.items.push(o);itemIdx.set(o.code,o);itemOptCache=null;fgOptCache=null;}
+
+function blankDB(){return{lineSeq:100,manSeq:1,poSeq:1001,items:[],boms:{},sos:[],pos:[],sups:[],
+  log:[{ts:Date.now(),txt:'▶ Started (no demo data)'}]};}
+
 try{db=JSON.parse(localStorage.getItem(KEY))}catch(e){}
-if(!db||!db.items)resetDemo(true);
+if(!db||!db.items)db=blankDB();
+reindex();
 db.lineSeq=db.lineSeq||100;db.manSeq=db.manSeq||1;db.poSeq=db.poSeq||1001;db.sups=db.sups||[];
 
 let tblState={z:0,c:false};
@@ -271,12 +289,11 @@ applyTbl();
 
 function save(){localStorage.setItem(KEY,JSON.stringify(db));
   if(cloudReady){mute=true;clearTimeout(saveT);
-    saveT=setTimeout(()=>{rtdb.set(db).then(()=>mute=false).catch(()=>mute=false)},400);}}
+    saveT=setTimeout(()=>{rtdb.set(db).then(()=>mute=false).catch(()=>mute=false)},600);}}
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function f(n){return (+n).toLocaleString(undefined,{maximumFractionDigits:2});}
 function today(){return new Date().toISOString().slice(0,10);}
 function dLeft(d){return Math.ceil((new Date(d)-new Date(today()))/864e5);}
-function item(c){return db.items.find(i=>i.code===c);}
 function str(v){return String(v??'').trim();}
 function log(t){db.log.unshift({ts:Date.now(),txt:t});}
 function isFG(c){return !!db.boms[c];}
@@ -303,6 +320,7 @@ function slug(n){return'RM-'+n.toUpperCase().replace(/[^A-Z0-9]+/g,'-').slice(0,
 
 /* ============ CORE MRP ============ */
 function calc(){
+  reindex(); /* cheap safety net — keeps index in sync after cloud refresh */
   const avail={},committed={},committedBy={},onOrder={},readyQ={},fgC={},fgBy={};
   db.items.forEach(i=>avail[i.code]=+i.onHand);
   db.pos.forEach(p=>{if(p.status==='open')onOrder[p.itemCode]=(onOrder[p.itemCode]||0)+ +p.qty;
@@ -330,20 +348,25 @@ function calc(){
   return{committed,committedBy,onOrder,readyQ,fgC,fgBy,rows};
 }
 function committedFor(i,calcRes){return isFG(i.code)?(calcRes.fgC[i.code]||0):(calcRes.committed[i.code]||0);}
-
-/* === aggregate BOM comps by category (Can / Carton / Label) for compact SO grid === */
 function aggCat(comps,eff,type){
   let req=0,avl=0,names=[];
   (comps||[]).forEach(c=>{if(c.excl)return;const it=item(c.itemCode);
     if(it&&it.cat===type){req+=c.qty*eff;avl+=+it.onHand;names.push(it.code+' · '+it.name);}});
   return{req:+req.toFixed(2),avl:+avl.toFixed(2),names};}
 
-/* ============ COMBOBOX ============ */
+/* ============ COMBOBOX (cached for 1000s of items) ============ */
+function itemOpts(){
+  if(!itemOptCache)itemOptCache=db.items.map(i=>({value:i.code,label:i.code+' · '+i.name,low:(i.code+' · '+i.name).toLowerCase()}));
+  return itemOptCache;}
+function fgOpts(){
+  if(!fgOptCache)fgOptCache=Object.keys(db.boms).map(c=>({value:c,label:c+' · '+db.boms[c].name,low:(c+' · '+db.boms[c].name).toLowerCase()}));
+  return fgOptCache;}
 function combo(input,box,getData,onPick){
   if(input._bound)return;input._bound=true;
   function list(){
-    const s=input.value.toLowerCase();
-    const m=getData().filter(x=>x.label.toLowerCase().includes(s)).slice(0,15);
+    const s=input.value.toLowerCase().trim();
+    const all=getData();const m=[];
+    for(let i=0;i<all.length&&m.length<15;i++)if(!s||all[i].low.includes(s))m.push(all[i]);
     let h=m.map(x=>'<div class="opt" data-v="'+esc(x.value)+'">'+esc(x.label)+'</div>').join('');
     if(!m.length&&s)h='<div class="opt none">no match</div>';
     box.innerHTML=h;box.classList.add('open');}
@@ -356,20 +379,37 @@ function combo(input,box,getData,onPick){
     input.value=o.dataset.v;box.classList.remove('open');
     if(onPick)onPick(o.dataset.v);});
 }
-const itemOpts=()=>db.items.map(i=>({value:i.code,label:i.code+' · '+i.name}));
-const fgOpts=()=>Object.keys(db.boms).map(c=>({value:c,label:c+' · '+db.boms[c].name}));
 function initCombos(){
   combo($('poItemTxt'),$('poItemBox'),itemOpts,v=>{poPickCode=v;});
-  combo($('poSupTxt'),$('poSupBox'),()=>db.sups.map(s=>({value:s.name,label:'👥 '+s.name+(s.phone?' · '+s.phone:'')})));
+  combo($('poSupTxt'),$('poSupBox'),()=>db.sups.map(s=>({value:s.name,label:'👥 '+s.name+(s.phone?' · '+s.phone:''),low:s.name.toLowerCase()})));
   combo($('soCodeTxt'),$('soCodeBox'),fgOpts,v=>{soPickCode=v;});
   combo($('bomProdTxt'),$('bomProdBox'),fgOpts,v=>{$('bomProdTxt').dataset.code=v;renderBOM();});
 }
 function bindBomCombos(){
   document.querySelectorAll('.cbitem').forEach(inp=>{
     const i=+inp.dataset.i;
-    combo(inp,inp.parentElement.querySelector('.opts'),itemOpts,v=>{upComp(bomPickFgSel(),i,'itemCode',v);renderBOM();});});
+    combo(inp,inp.parentElement.querySelector('.opts'),itemOpts,v=>{upComp($('bomProdTxt').dataset.code,i,'itemCode',v);renderBOM();});});
 }
 function bomPickFgSel(){return $('bomProdTxt').dataset.code||'';}
+
+/* ============ DEMO CLEANUP (exact built-in demo codes only) ============ */
+const DEMO_CODES=new Set(['RM-SEAL36','RM-CAN1L-G','RM-CTN12X1','RM-LB-VMO-FU','RM-LB-VMO-FD','RM-LB-VMO-B',
+ 'RM-CAP61','RM-CAN5L-BL','RM-CTN4X5','RM-LB-5L-FA','RM-LB-5L-FB','RM-LB-5L-BK','RM-CAP38','RM-CAN4L-BG',
+ 'RM-CTN4X4','RM-LB-V8-4L','RM-JAR500','RM-LID500','RM-LB-EP2-F','RM-LB-EP2-B','RM-BOX12X500','RM-PAIL20',
+ 'RM-LID20','RM-DRUM208','RM-LIQ-0W16','RM-LIQ-20W50','RM-LIQ-V8','RM-SEM-GREASE','FG-0521','FG-0213','FG-0658','FG-1371']);
+const DEMO_BOMS=['FG-0213','FG-0521','FG-0658','FG-1371'];
+const DEMO_SUPS=new Set(['RAK Closures LLC','CanPack Industries','PrintHub Labels','PailPro Plastics']);
+function cleanDemo(){
+  if(!confirm('Remove all built-in DEMO items, BOMs, orders, POs and demo suppliers?\n\nYour uploaded items are NOT demo codes → they stay safe.'))return;
+  const iBefore=db.items.length;
+  db.items=db.items.filter(i=>!DEMO_CODES.has(i.code));
+  DEMO_BOMS.forEach(k=>delete db.boms[k]);
+  db.sos=db.sos.filter(s=>!/^GE-SO-2026/.test(s.soId));
+  db.pos=db.pos.filter(p=>!/^(PO-100[1-4])$/.test(p.id));
+  db.sups=db.sups.filter(s=>!DEMO_SUPS.has(s.name));
+  reindex();
+  log('🧹 Demo data removed: '+(iBefore-db.items.length)+' items');
+  save();init();alert('✔ Demo data removed.\nItems now in database: '+db.items.length);}
 
 /* ============ SUPPLIERS ============ */
 function addSup(e){e.preventDefault();
@@ -396,16 +436,16 @@ function renderSups(){
 function addItem(e){e.preventDefault();
   const c=str($('itCode').value).toUpperCase();
   if(item(c))return alert('Code already exists: '+c);
-  db.items.push({code:c,name:str($('itName').value),cat:$('itCat').value,unit:str($('itUnit').value)||'pc',
+  addItemObj({code:c,name:str($('itName').value),cat:$('itCat').value,unit:str($('itUnit').value)||'pc',
     onHand:+$('itQty').value||0,min:+$('itMin').value||0});
   save();render();e.target.reset();}
 function delItem(c){
   if(db.boms[c])return alert('This is an FG with a BOM.\nRemove the FG first (BOM editor).');
   if(Object.values(db.boms).some(b=>b.comps.some(x=>x.itemCode===c)))
     return alert('Used in a BOM — remove it there first.');
-  if(confirm('Delete '+c+'?')){db.items=db.items.filter(i=>i.code!==c);save();render();}}
+  if(confirm('Delete '+c+'?')){db.items=db.items.filter(i=>i.code!==c);itemIdx.delete(c);itemOptCache=null;save();render();}}
 function editNum(c,fld,v){const it=item(c);if(!it)return;const n=num(v);if(n==null)return render();
-  it[fld]=Math.max(0,n);save();render();}
+  it[fld]=Math.max(0,n);save();renderStock(lastC);}
 
 /* ============ SALES ORDERS ============ */
 function addSO(e){e.preventDefault();
@@ -416,8 +456,9 @@ function addSO(e){e.preventDefault();
   const ex=db.sos.find(s=>s.status==='open'&&s.soId===id&&s.code===code);
   if(ex){ex.qty=qty;ex.date=date;}
   else db.sos.push({key:id+'~'+code+'~'+(db.lineSeq++),soId:id,code,date,qty,ts:Date.now(),status:'open'});
+  fgOptCache=null;
   save();render();e.target.reset();soPickCode='';$('soCodeTxt').value='';}
-function setFG(i){const r=calc().rows[i];if(!r)return;
+function setFG(i){const r=lastC.rows[i];if(!r)return;
   const inp=$('fgi'+i);if(!inp)return;
   const v=Math.max(0,Math.min(r.l.qty,num(inp.value)??0));
   r.l.fgUsed=+v.toFixed(2);
@@ -476,7 +517,8 @@ function newProduct(){const c=str(prompt('FG Code (e.g. FG-0213):')).toUpperCase
   if(!db.boms[c])db.boms[c]={name:c,uom:'CTN',comps:[]};
   const n=str(prompt('FG Description:',db.boms[c].name));if(n)db.boms[c].name=n;
   const u=str(prompt('FG UOM (CTN):',db.boms[c].uom));if(u)db.boms[c].uom=u;
-  if(!item(c))db.items.push({code:c,name:db.boms[c].name,cat:'Product',unit:'CTN',onHand:0,min:0});
+  if(!item(c))addItemObj({code:c,name:db.boms[c].name,cat:'Product',unit:'CTN',onHand:0,min:0});
+  fgOptCache=null;
   $('bomProdTxt').dataset.code=c;$('bomProdTxt').value=c;
   save();renderBOM();render();}
 function addComp(){const fg=bomPickFgSel();if(!fg)return alert('Select an FG first (type in the box above).');
@@ -511,7 +553,7 @@ function impFile(inp,kind){
     if(kind==='items')rep('repItems',impItems(rows));
     if(kind==='bom')rep('repBom',impBOM(rows));
     if(kind==='so')rep('repSo',impSO(rows));
-    save();renderBOM();render();
+    reindex();save();renderBOM();render();
   }catch(err){alert('Could not read file: '+err.message);}
   inp.value='';};
   r.readAsBinaryString(inp.files[0]);}
@@ -528,12 +570,16 @@ function impItems(rows){let a=0,u=0,s=0;
     const it=item(c);
     if(it){if(name)it.name=name;if(unit)it.unit=unit;if(cat)it.cat=cat;
       if(stock!=null)it.onHand=stock;if(min!=null)it.min=min;u++;}
-    else{db.items.push({code:c,name:name||c,cat:cat||guessType(name||c),unit:unit||'pc',
+    else{addItemObj({code:c,name:name||c,cat:cat||guessType(name||c),unit:unit||'pc',
       onHand:stock??0,min:min??0});a++;}});
   log('📄 Items Excel: +'+a+' new, '+u+' updated');
-  return '✔ Items imported — <b class="warn">'+a+' added</b>, '+u+' updated'+(s?', <span class="grey">'+s+' skipped</span>':'');}
+  return '✔ Items imported — <b class="warn">'+a+' added</b>, '+u+' updated'+(s?', <span class="grey">'+s+' skipped</span>':'')+
+    '<br>Total items now: <b>'+db.items.length+'</b>';}
 function impBOM(rows){
   const seen={};let fgs=0,comps=0;const created=[],excluded=[];let cur=null;
+  /* name index for fast matching across 1000s of items */
+  const nameIdx=new Map();db.items.forEach(i=>{if(!nameIdx.has(i.name.toLowerCase()))nameIdx.set(i.name.toLowerCase(),i);});
+  const nameArr=db.items.map(i=>({low:i.name.toLowerCase(),code:i.code}));
   rows.forEach(r=>{
     const fgc=str(pick(r,[/fg ?code/i])).toUpperCase();
     if(fgc){cur=fgc;
@@ -542,7 +588,7 @@ function impBOM(rows){
       const d=str(pick(r,[/item description|fg ?desc|fg ?name|product/i]));if(d)db.boms[cur].name=d;
       const u=str(pick(r,[/item uom|fg ?uom/i]));if(u)db.boms[cur].uom=u;
       if(!seen[cur]){seen[cur]=1;fgs++;}
-      if(!item(cur))db.items.push({code:cur,name:db.boms[cur].name,cat:'Product',unit:db.boms[cur].uom,onHand:0,min:0});}
+      if(!item(cur))addItemObj({code:cur,name:db.boms[cur].name,cat:'Product',unit:db.boms[cur].uom,onHand:0,min:0});}
     if(!cur)return;
     const cn=str(pick(r,[/item name \(items\)|component name|item name/i]));
     let cc=str(pick(r,[/item code \(items\)|component code|comp ?code/i])).toUpperCase();
@@ -551,12 +597,15 @@ function impBOM(rows){
     if((!cn&&!cc)||cq==null||cq<=0)return;
     const ex=isLiquid(cn||cc);
     let it=cc?item(cc):null;
-    if(!it&&cn){it=db.items.find(x=>x.name.toLowerCase()===cn.toLowerCase())
-      ||db.items.find(x=>x.name.toLowerCase().includes(cn.toLowerCase())||cn.toLowerCase().includes(x.name.toLowerCase()));}
-    if(!it){cc=cc||slug(cn);db.items.push({code:cc,name:cn||cc,cat:guessType(cn||cc),
-      unit:cu||'pc',onHand:0,min:0});it=item(cc);created.push(cc+' — '+cn);}
+    if(!it&&cn)it=nameIdx.get(cn.toLowerCase())||null;
+    if(!it&&cn){const cl=cn.toLowerCase();
+      for(let i=0;i<nameArr.length;i++){const a=nameArr[i];
+        if(a.low.includes(cl)||cl.includes(a.low)){it=item(a.code);break;}}}
+    if(!it){cc=cc||slug(cn);addItemObj({code:cc,name:cn||cc,cat:guessType(cn||cc),
+      unit:cu||'pc',onHand:0,min:0});nameIdx.set((cn||cc).toLowerCase(),item(cc));created.push(cc+' — '+cn);}
     if(ex)excluded.push(cn||cc);
     db.boms[cur].comps.push({itemCode:it.code,qty:cq,uom:cu,excl:ex});comps++;});
+  fgOptCache=null;
   log('📄 BOM Excel: '+fgs+' FG, '+comps+' components');
   return '✔ BOM imported — <b>'+fgs+' FG codes</b>, '+comps+' components'+
     (excluded.length?'<div class="grey">Excluded as liquid/semi: '+esc(excluded.join(', '))+'</div>':'')+
@@ -577,7 +626,7 @@ function impSO(rows){let ok=0,upd=0,skip=0;const missing={};
   return '✔ Sales orders imported — <b class="warn">'+ok+' new lines</b>, '+upd+' updated, '+skip+' skipped'+
     (Object.keys(missing).length?'<div class="bad">No BOM for: <b>'+Object.keys(missing).join(', ')+'</b> — upload BOM first, re-upload file</div>':'');}
 
-/* ============ TEMPLATES & DUMMIES ============ */
+/* ============ TEMPLATES ============ */
 function dlXlsx(aoa,file,sheet){
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),sheet||'Sheet1');
@@ -596,59 +645,6 @@ function tpl(name){
   if(name==='so')aoa=[['Sr','ID','Date','Quantity (Sales Order Item)','Item Code (Sales Order Item)','Item Name (Sales Order Item)'],
     [1,'GE-SO-2026-0935','11-04-2026',1,'FG-0213','VENOL M/O 0W16 API SP (12X1L)']];
   dlXlsx(aoa,name+'_template.xlsx');}
-function dummy(name){
-  if(typeof XLSX==='undefined')return alert('Connect internet once for Excel library.');
-  if(name==='items')dlXlsx([
-    ['Code','Name','Type','Unit','Stock','Min Level'],
-    ['RM-SEAL36','INDUCTION SEAL VENOL 36 MM (1L) SILICON','Cap','pc',4800,1000],
-    ['RM-CAN1L-G','EMPTY CAN (1L) VENOL FL GREEN PT 150643','Can','pc',5200,1200],
-    ['RM-CTN12X1','EMPTY CTN VENOL (12X1L) UNIVERSAL EB 750 GM','Carton','pc',400,100],
-    ['RM-LB-VMO-FU','LABELS VENOL 0W16 (1L) FU','Label','pc',4200,1000],
-    ['RM-LB-VMO-FD','LABELS VENOL 0W16 (1L) FD','Label','pc',3000,1000],
-    ['RM-LB-VMO-B','LABELS VENOL 0W16 (1L) BACK','Label','pc',2600,1000],
-    ['RM-CAP61','CAP 61 MM (5L)','Cap','pc',25,300],
-    ['RM-CAN5L-BL','EMPTY CAN (5L) VENOL BLUE','Can','pc',350,120],
-    ['RM-CTN4X5','EMPTY CTN (4X5L)','Carton','pc',90,40],
-    ['RM-LB-5L-FA','LABEL FRONT-A VENOL 20W50 5L','Label','pc',380,100],
-    ['RM-LB-5L-FB','LABEL FRONT-B VENOL 20W50 5L','Label','pc',360,100],
-    ['RM-LB-5L-BK','LABEL BACK VENOL 20W50 5L','Label','pc',350,100],
-    ['RM-CAP38','CAP 38 MM (4L)','Cap','pc',640,200],
-    ['RM-CAN4L-BG','EMPTY CAN (4L) BIOGREEN','Can','pc',500,150],
-    ['RM-CTN4X4','EMPTY CTN (4X4L)','Carton','pc',120,40],
-    ['RM-LB-V8-4L','LABEL V8 5W20 4L FRONT','Label','pc',480,120],
-    ['RM-JAR500','GREASE JAR 500 GM GOLD PLASTIC','Can','pc',2600,500],
-    ['RM-LID500','LID 500 GM JAR','Cap','pc',3000,500],
-    ['RM-LB-EP2-F','LABEL EP2 500 GM FRONT','Label','pc',2400,600],
-    ['RM-LB-EP2-B','LABEL EP2 500 GM BACK','Label','pc',2200,600],
-    ['RM-BOX12X500','BOX (12X500 GM)','Carton','pc',260,60],
-    ['RM-PAIL20','PAIL 20 L WHITE','Bucket','pc',340,80],
-    ['RM-LID20','LID 20 L','Cap','pc',320,80],
-    ['RM-DRUM208','DRUM 208 L STEEL','Drum','pc',95,25],
-    ['FG-0521','VENOL M/O 20W50 API SN (4X5L) — READY FG','Product','CTN',6,0],
-    ['FG-0213','VENOL M/O 0W16 (12X1L) — READY FG','Product','CTN',3,0]
-  ],'dummy_items.xlsx','Items');
-  if(name==='bom')dlXlsx([
-    ['FG Code','Item Description','Item UOM','Item Code (Items)','Item Name (Items)','Qty (Items)','UOM (Items)'],
-    ['FG-0213','VENOL M/O 0W16 API SP (RC) C5 GF/6B (12X1L)','CTN','RM-SEAL36','INDUCTION SEAL VENOL 36 MM (1L) SILICON',12,'PCS'],
-    ['','','','RM-CAN1L-G','EMPTY CAN (1L) VENOL FL GREEN PT 150643',12,'PCS'],
-    ['','','','RM-CTN12X1','EMPTY CTN VENOL (12X1L) UNIVERSAL EB 750 GM',1,'PCS'],
-    ['','','','RM-LB-VMO-FU','LABELS VENOL 0W16 (1L) FU',12,'PCS'],
-    ['','','','RM-LB-VMO-FD','LABELS VENOL 0W16 (1L) FD',12,'PCS'],
-    ['','','','RM-LB-VMO-B','LABELS VENOL 0W16 (1L) BACK',12,'PCS'],
-    ['','','','','VENOL LIQ M/O 0W16 API SP',12,'LITER'],
-    ['FG-0521','VENOL M/O 20W50 API SN (4X5L)','CTN','RM-CAP61','CAP 61 MM (5L)',4,'PCS'],
-    ['','','','RM-CAN5L-BL','EMPTY CAN (5L) VENOL BLUE',4,'PCS'],
-    ['','','','RM-CTN4X5','EMPTY CTN (4X5L)',1,'PCS'],
-    ['','','','RM-LB-5L-FA','LABEL FRONT-A VENOL 20W50 5L',4,'PCS'],
-    ['','','','RM-LB-5L-FB','LABEL FRONT-B VENOL 20W50 5L',4,'PCS'],
-    ['','','','RM-LB-5L-BK','LABEL BACK VENOL 20W50 5L',4,'PCS'],
-    ['','','','','VENOL LIQ M/O 20W50 API SN',20,'LITER']
-  ],'dummy_bom.xlsx','BOM');
-  if(name==='so')dlXlsx([
-    ['Sr','ID','Date','Quantity (Sales Order Item)','Item Code (Sales Order Item)','Item Name (Sales Order Item)'],
-    [1,'GE-SO-2026-0935','05-05-2026',10,'FG-0521','VENOL M/O 20W50 API SN (4X5L)'],
-    [2,'GE-SO-2026-0935','05-05-2026',5,'FG-0213','VENOL M/O 0W16 API SP (RC) C5 GF/6B (12X1L)']
-  ],'dummy_sales_order.xlsx','SO');}
 
 /* ============ REPORTS ============ */
 const REPORTS=[
@@ -711,301 +707,338 @@ const REPORTS=[
      if(lbl.req>lbl.avl)sh.push('LBL −'+f(lbl.req-lbl.avl));
      out.push([l.soId,l.code,(b||{}).name||'',l.qty,
        f(can.req),f(can.avl),f(ctn.req),f(ctn.avl),f(lbl.req),f(lbl.avl),
-       sh.length?'SHORTAGE: '+sh.join(', '):'OK — surplus after order']);
-   });
+       sh.length?'SHORTAGE: '+sh.join(', '):'OK — surplus after order']);});
    return{head:['SO ID','FG Code','Description','Req FG','Req Can','Avail Can','Req Ctn','Avail Ctn','Req Label','Avail Label','Remark'],
     rows:out,file:'report_so_grid'};}],
  ['done','✅ Completed Orders',()=>{
    return{head:['SO ID','FG Code','Qty CTN','From FG','Completed On'],
     rows:db.sos.filter(s=>s.status==='done').sort((a,b)=>b.doneTs-a.doneTs)
       .map(s=>[s.soId,s.code,s.qty,s.fgUsed||0,new Date(s.doneTs).toLocaleString()]),
-    file:'report_completed_orders'};}],
- ['sup','👥 Suppliers',()=>{
-   return{head:['Supplier','Phone','Open/Ready POs'],
-    rows:db.sups.map(s=>[s.name,s.phone||'',db.pos.filter(p=>p.sup===s.name&&p.status!=='recd').length]),
-    file:'report_suppliers'};}]
+file:'report_completed_orders'};}],
+['sup','👥 Suppliers',()=>{
+return{head:['Supplier','Phone','Open/Ready POs'],
+rows:db.sups.map(s=>[s.name,s.phone||'',db.pos.filter(p=>p.sup===s.name&&p.status!=='recd').length]),
+file:'report_suppliers'};}]
 ];
 function showReport(k){const r=REPORTS.find(x=>x[0]===k);if(!r)return;
-  curRep=r[2]();curRep.file+='_'+today()+'.csv';
-  $('repTitle').textContent=r[1];
-  $('repPrev').innerHTML='<thead><tr>'+curRep.head.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead>'+
-    (curRep.rows.length?curRep.rows.map(row=>'<tr>'+row.map((c,ci)=>'<td data-l="'+esc(curRep.head[ci])+'">'+esc(c)+'</td>').join('')+'</tr>').join('')
-     :'<tr><td colspan="'+curRep.head.length+'">No data</td></tr>');
-  $('repArea').classList.remove('hide');
-  [...document.querySelectorAll('#repBtns button')].forEach(b=>b.classList.toggle('blue',b.dataset.k===k));}
+curRep=r2;curRep.file+='_'+today()+'.csv';
+( 
+′
+ repTitle 
+′
+ ).textContent=r[1];
+('repPrev').innerHTML='<thead><tr>'+curRep.head.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead>'+
+(curRep.rows.length?curRep.rows.map(row=>'<tr>'+row.map((c,ci)=>'<td data-l="'+esc(curRep.head[ci])+'">'+esc(c)+'</td>').join('')+'</tr>').join('')
+:'<tr><td colspan="'+curRep.head.length+'">No data</td></tr>');
+('repArea').classList.remove('hide');
+[...document.querySelectorAll('#repBtns button')].forEach(b=>b.classList.toggle('blue',b.dataset.k===k));}
 function repDownload(){
-  const csv=curRep.head.join(',')+'\n'+curRep.rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
-  dl('data:text/csv;charset=utf-8,'+encodeURIComponent(csv),curRep.file);}
+const csv=curRep.head.join(',')+'\n'+curRep.rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+dl('data:text/csv;charset=utf-8,'+encodeURIComponent(csv),curRep.file);}
 function renderRepBtns(){
-  $('repBtns').innerHTML=REPORTS.map(r=>'<button data-k="'+r[0]+'" onclick="showReport(\''+r[0]+'\')">'+r[1]+'</button>').join('');}
+('repBtns').innerHTML=REPORTS.map(r=>'<button data-k="'+r[0]+'" onclick="showReport(\''+r[0]+'\')">'+r[1]+'</button>').join('');}
 
 /* ============ ALERTS ============ */
-function refreshAlerts(){const c=calc(),agg={};
-  c.rows.forEach(r=>r.comps.forEach(x=>{if(x.short>0)agg[x.itemCode]={n:x.name,u:x.unit,s:(agg[x.itemCode]?.s||0)+x.short,
-    inc:(c.onOrder[x.itemCode]||0)+(c.readyQ[x.itemCode]||0)};}));
-  const m=Object.values(agg).map(o=>'🔴 <b>'+esc(o.n)+'</b> SHORT <b>'+f(o.s)+' '+esc(o.u)+'</b> → PLEASE ORDER NOW'+(o.inc?' <span style="color:var(--green)">(+'+f(o.inc)+' incoming)</span>':''));
-  db.items.forEach(i=>{const cm=c.fgC[i.code]||0;
-    if(cm>i.onHand)m.push('🏭 FG <b>'+esc(i.code)+'</b> not enough ready stock (need '+f(cm)+', have '+f(i.onHand)+') — produce or reduce FG allocation');});
-  db.pos.filter(p=>p.status!=='recd'&&p.exp<today()).forEach(p=>
-    m.unshift('🚚 ⏰ <b>'+p.id+'</b> ('+esc(p.sup)+') OVERDUE '+(-dLeft(p.exp))+'d — '+(p.status==='ready'?'ready at supplier, arrange collection!':'chase supplier!')));
-  $('alerts').innerHTML=m.length?'<div class="alertbar"><b>🚨 ACTION REQUIRED:</b><br>'+m.join('<br>')+'</div>':'';}
+function refreshAlerts(C){const agg={};
+C.rows.forEach(r=>r.comps.forEach(x=>{if(x.short>0)agg[x.itemCode]={n:x.name,u:x.unit,s:(agg[x.itemCode]?.s||0)+x.short,
+inc:(C.onOrder[x.itemCode]||0)+(C.readyQ[x.itemCode]||0)};}));
+const m=Object.values(agg).map(o=>'🔴 <b>'+esc(o.n)+'</b> SHORT <b>'+f(o.s)+' '+esc(o.u)+'</b> → PLEASE ORDER NOW'+(o.inc?' <span style="color:var(--green)">(+'+f(o.inc)+' incoming)</span>':''));
+db.items.forEach(i=>{const cm=C.fgC[i.code]||0;
+if(cm>i.onHand)m.push('🏭 FG <b>'+esc(i.code)+'</b> not enough ready stock (need '+f(cm)+', have '+f(i.onHand)+') — produce or reduce FG allocation');});
+db.pos.filter(p=>p.status!=='recd'&&p.exp<today()).forEach(p=>
+m.unshift('🚚 ⏰ <b>'+p.id+'</b> ('+esc(p.sup)+') OVERDUE '+(-dLeft(p.exp))+'d — '+(p.status==='ready'?'ready at supplier, arrange collection!':'chase supplier!')));
+$('alerts').innerHTML=m.length?'<div class="alertbar"><b>🚨 ACTION REQUIRED:</b>
+'+m.join('
+')+'</div>':'';}
+
+/* ============ STOCK TAB: search + type filter + pagination (fast) ============ /
+let stockQ='',stockCat='',stockPage=0,stockT=null;const SPAGE=100;
+function renderStock(C){
+lastC=C||lastC||calc();
+const q=
+( 
+′
+ stockQ 
+′
+ ).value.toLowerCase().trim().split(/\s+/).filter(Boolean);constcatSel=
+('stockCat').value;
+/ type dropdown options from real data /
+const cats=[...new Set(db.items.map(i=>i.cat))].sort();
+const cur=catSel;
+$('stockCat').innerHTML='<option value="">All types ('+db.items.length+')</option>'+
+cats.map(c=>'<option'+(c===cur?' selected':'')+'>'+esc(c)+'</option>').join('');
+let list=db.items;
+if(cur)list=list.filter(i=>i.cat===cur);
+if(q.length)list=list.filter(i=>{const hay=(i.code+' '+i.name+' '+i.cat).toLowerCase();
+return q.every(t=>hay.includes(t));});
+const total=list.length,pages=Math.max(1,Math.ceil(total/SPAGE));
+if(stockPage>=pages)stockPage=pages-1;if(stockPage<0)stockPage=0;
+const page=list.slice(stockPageSPAGE,(stockPage+1)SPAGE);
+$('stockCount').textContent=total?('showing '+(stockPageSPAGE+1)+'–'+Math.min(total,(stockPage+1)*SPAGE)+' of '+total):'no matches';
+let st='<thead><tr><th>Code</th><th>Item</th><th>Type</th><th>Unit</th><th>Actual</th><th>Committed</th><th>After Cmt.</th><th>On Order</th><th>Ready at Sup.</th><th>Min</th><th>Status</th><th>Action</th></tr></thead>';
+page.forEach(i=>{const cm=committedFor(i,lastC),fr=+(i.onHand-cm).toFixed(2);
+const stat=fr<0?badge('b-red','SHORTAGE'):fr<i.min?badge('b-amb','LOW'):badge('b-grn','OK');
+st+='<tr class="'+(fr<0?'rowRed':'')+'"><td data-l="Code">'+(isFG(i.code)?'🏭 ':'')+esc(i.code)+'</td>'+
+'<td data-l="Item">'+esc(i.name)+'</td><td data-l="Type">'+esc(i.cat)+'</td><td data-l="Unit">'+esc(i.unit)+'</td>'+
+'<td data-l="Actual" class="num" contenteditable onblur="editNum(\''+esc(i.code)+'\',\'onHand\',this.textContent)"><b>'+f(i.onHand)+'</b></td>'+
+'<td data-l="Committed" class="num"><b>'+f(cm)+'</b></td>'+
+'<td data-l="After Cmt." class="num '+(fr<0?'red':'')+'"><b>'+f(fr)+'</b></td>'+
+'<td data-l="On Order" class="num">'+(lastC.onOrder[i.code]?f(lastC.onOrder[i.code]):'-')+'</td>'+
+'<td data-l="Ready at Sup." class="num">'+(lastC.readyQ[i.code]?'<b style="color:var(--blue)">'+f(lastC.readyQ[i.code])+'</b>':'-')+'</td>'+
+'<td data-l="Min" class="num" contenteditable onblur="editNum(\''+esc(i.code)+'\',\'min\',this.textContent)">'+f(i.min)+'</td>'+
+'<td data-l="Status">'+stat+'</td>'+
+'<td class="act" data-l="Action"><button onclick="toggleDetail(\''+esc(i.code)+'\')">🔍</button>'+
+'<button class="danger" onclick="delItem(\''+esc(i.code)+'\')">🗑</button></td></tr>';
+if(expanded===i.code){
+const pl=lastC.committedBy[i.code],fl=lastC.fgBy[i.code];
+let txt='';
+if(pl)txt+='🔒 Packaging committed by: '+pl.map(o=>'<b>'+esc(o.so)+'</b> ('+esc(o.code)+') '+f(o.q)+' due '+o.date).join(' &nbsp;|&nbsp; ');
+if(fl)txt+=(txt?'
+':'')+'🏭 FG reserved by: '+fl.map(o=>'<b>'+esc(o.so)+'</b> '+f(o.q)+' CTN due '+o.date).join(' &nbsp;|&nbsp; ');
+st+='<tr class="sub"><td colspan="12">'+(txt||'🔓 No commitment')+'</td></tr>';}});
+$('stockTbl').innerHTML=st||'<tr><td colspan="12">No items match — adjust search or type filter</td></tr>';}
 
 /* ============ RENDER ============ */
 function badge(c,t){return'<span class="badge '+c+'">'+t+'</span>';}
 function toggleDetail(c){expanded=expanded===c?null:c;render();}
 function toggleSo(k){expandedSo=expandedSo===k?null:k;render();}
-function render(){const C=calc();const{committed,committedBy,onOrder,readyQ,fgC,fgBy,rows}=C;
-  let shorts=0,lows=0;
-  db.items.forEach(i=>{const cm=committedFor(i,C);
-    if(cm>i.onHand)shorts++;else if(i.onHand-cm<i.min)lows++;});
-  const openPO=db.pos.filter(p=>p.status!=='recd'),over=openPO.filter(p=>p.exp<today());
-  $('cards').innerHTML=[
-    [rows.length,'Open SO Lines','#5b3a1e'],
-    [rows.filter(r=>r.short).length,'Lines Blocked (No Packaging)',rows.some(r=>r.short)?'var(--red)':'var(--green)'],
-    [shorts,'Items In Shortage',shorts?'var(--red)':'var(--green)'],
-    [lows,'Below Min Level',lows?'var(--amber)':'var(--green)'],
-    [openPO.length,'POs (Ordered + At Supplier)','#5b3a1e'],
-    [over.length,'PO Deliveries Overdue',over.length?'var(--red)':'var(--green)']
-  ].map(c=>'<div class="card"><h2 style="color:'+c[2]+'">'+c[0]+'</h2><p>'+c[1]+'</p></div>').join('');
+function render(){const C=calc();lastC=C;
+const{committedBy,onOrder,readyQ,fgBy,rows}=C;
+let shorts=0,lows=0;
+db.items.forEach(i=>{const cm=committedFor(i,C);
+if(cm>i.onHand)shorts++;else if(i.onHand-cm<i.min)lows++;});
+const openPO=db.pos.filter(p=>p.status!=='recd'),over=openPO.filter(p=>p.exp<today());
+$('cards').innerHTML=[
+[rows.length,'Open SO Lines','#5b3a1e'],
+[rows.filter(r=>r.short).length,'Lines Blocked (No Packaging)',rows.some(r=>r.short)?'var(--red)':'var(--green)'],
+[shorts,'Items In Shortage',shorts?'var(--red)':'var(--green)'],
+[lows,'Below Min Level',lows?'var(--amber)':'var(--green)'],
+[openPO.length,'POs (Ordered + At Supplier)','#5b3a1e'],
+[over.length,'PO Deliveries Overdue',over.length?'var(--red)':'var(--green)']
+].map(c=>'<div class="card"><h2 style="color:'+c[2]+'">'+c[0]+'</h2><p>'+c[1]+'</p></div>').join('');
 
-  let sr='';
-  db.items.forEach(i=>{const cm=committedFor(i,C);
-    if(cm>i.onHand)sr+='<tr class="rowRed"><td data-l="Code">'+esc(i.code)+'</td><td data-l="Item">'+esc(i.name)+'</td>'+
-      '<td data-l="Actual" class="num">'+f(i.onHand)+'</td><td data-l="Committed" class="num red">'+f(cm)+'</td>'+
-      '<td data-l="After Cmt." class="num red">'+f(i.onHand-cm)+'</td><td data-l="With Supplier">'+
-      ((onOrder[i.code]||readyQ[i.code])?
-        (onOrder[i.code]?f(onOrder[i.code])+' ordered':'')+(onOrder[i.code]&&readyQ[i.code]?' + ':'')+(readyQ[i.code]?f(readyQ[i.code])+' ready ✔':'')
-        :'❌ none — RAISE PO')+'</td></tr>';});
-  $('shortTbl').innerHTML='<thead><tr><th>Code</th><th>Item / FG</th><th>Actual</th><th>Committed</th><th>After Commitment</th><th>With Supplier</th></tr></thead>'+
-    (sr||'<tr><td colspan="6">🎉 Nothing short</td></tr>');
+let sr='';
+db.items.forEach(i=>{const cm=committedFor(i,C);
+if(cm>i.onHand)sr+='<tr class="rowRed"><td data-l="Code">'+esc(i.code)+'</td><td data-l="Item">'+esc(i.name)+'</td>'+
+'<td data-l="Actual" class="num">'+f(i.onHand)+'</td><td data-l="Committed" class="num red">'+f(cm)+'</td>'+
+'<td data-l="After Cmt." class="num red">'+f(i.onHand-cm)+'</td><td data-l="With Supplier">'+
+((onOrder[i.code]||readyQ[i.code])?
+(onOrder[i.code]?f(onOrder[i.code])+' ordered':'')+(onOrder[i.code]&&readyQ[i.code]?' + ':'')+(readyQ[i.code]?f(readyQ[i.code])+' ready ✔':'')
+:'❌ none — RAISE PO')+'</td></tr>';});
+$('shortTbl').innerHTML='<thead><tr><th>Code</th><th>Item / FG</th><th>Actual</th><th>Committed</th><th>After Commitment</th><th>With Supplier</th></tr></thead>'+
+(sr||'<tr><td colspan="6">🎉 Nothing short</td></tr>');
 
-  let sg='';
-  db.items.forEach(i=>{const cm=committedFor(i,C);
-    const gap=(cm+i.min)-i.onHand-((onOrder[i.code]||0)+(readyQ[i.code]||0));
-    if(gap>0)sg+='<tr><td data-l="Code">'+esc(i.code)+'</td><td data-l="Item">'+esc(i.name)+'</td>'+
-      '<td data-l="Suggested">Order <b style="color:var(--red)">'+f(Math.ceil(gap))+' '+esc(i.unit)+'</b></td>'+
-      '<td class="act" data-l="Action"><button onclick="quickPO(\''+esc(i.code)+'\')">📝 Create PO</button></td></tr>';});
-  $('suggestTbl').innerHTML='<thead><tr><th>Code</th><th>Item</th><th>Suggested Qty</th><th>Action</th></tr></thead>'+
-    (sg||'<tr><td colspan="4">✅ No purchases needed</td></tr>');
+let sg='';
+db.items.forEach(i=>{const cm=committedFor(i,C);
+const gap=(cm+i.min)-i.onHand-((onOrder[i.code]||0)+(readyQ[i.code]||0));
+if(gap>0)sg+='<tr><td data-l="Code">'+esc(i.code)+'</td><td data-l="Item">'+esc(i.name)+'</td>'+
+'<td data-l="Suggested">Order <b style="color:var(--red)">'+f(Math.ceil(gap))+' '+esc(i.unit)+'</b></td>'+
+'<td class="act" data-l="Action"><button onclick="quickPO(\''+esc(i.code)+'\')">📝 Create PO</button></td></tr>';});
+$('suggestTbl').innerHTML='<thead><tr><th>Code</th><th>Item</th><th>Suggested Qty</th><th>Action</th></tr></thead>'+
+(sg||'<tr><td colspan="4">✅ No purchases needed</td></tr>');
 
-  let st='<thead><tr><th>Code</th><th>Item</th><th>Type</th><th>Unit</th><th>Actual</th><th>Committed</th><th>After Cmt.</th><th>On Order</th><th>Ready at Sup.</th><th>Min</th><th>Status</th><th>Action</th></tr></thead>';
-  db.items.forEach(i=>{const cm=committedFor(i,C),fr=+(i.onHand-cm).toFixed(2);
-    const stat=fr<0?badge('b-red','SHORTAGE'):fr<i.min?badge('b-amb','LOW'):badge('b-grn','OK');
-    st+='<tr class="'+(fr<0?'rowRed':'')+'"><td data-l="Code">'+(isFG(i.code)?'🏭 ':'')+esc(i.code)+'</td>'+
-      '<td data-l="Item">'+esc(i.name)+'</td><td data-l="Type">'+esc(i.cat)+'</td><td data-l="Unit">'+esc(i.unit)+'</td>'+
-      '<td data-l="Actual" class="num" contenteditable onblur="editNum(\''+esc(i.code)+'\',\'onHand\',this.textContent)"><b>'+f(i.onHand)+'</b></td>'+
-      '<td data-l="Committed" class="num"><b>'+f(cm)+'</b></td>'+
-      '<td data-l="After Cmt." class="num '+(fr<0?'red':'')+'"><b>'+f(fr)+'</b></td>'+
-      '<td data-l="On Order" class="num">'+(onOrder[i.code]?f(onOrder[i.code]):'-')+'</td>'+
-      '<td data-l="Ready at Sup." class="num">'+(readyQ[i.code]?'<b style="color:var(--blue)">'+f(readyQ[i.code])+'</b>':'-')+'</td>'+
-      '<td data-l="Min" class="num" contenteditable onblur="editNum(\''+esc(i.code)+'\',\'min\',this.textContent)">'+f(i.min)+'</td>'+
-      '<td data-l="Status">'+stat+'</td>'+
-      '<td class="act" data-l="Action"><button onclick="toggleDetail(\''+esc(i.code)+'\')">🔍</button>'+
-      '<button class="danger" onclick="delItem(\''+esc(i.code)+'\')">🗑</button></td></tr>';
-    if(expanded===i.code){
-      const pl=committedBy[i.code],fl=fgBy[i.code];
-      let txt='';
-      if(pl)txt+='🔒 Packaging committed by: '+pl.map(o=>'<b>'+esc(o.so)+'</b> ('+esc(o.code)+') '+f(o.q)+' due '+o.date).join(' &nbsp;|&nbsp; ');
-      if(fl)txt+=(txt?'<br>':'')+'🏭 FG reserved by: '+fl.map(o=>'<b>'+esc(o.so)+'</b> '+f(o.q)+' CTN due '+o.date).join(' &nbsp;|&nbsp; ');
-      st+='<tr class="sub"><td colspan="12">'+(txt||'🔓 No commitment')+'</td></tr>';}});
-  $('stockTbl').innerHTML=st;
+renderStock(C);
 
-  /* ===== COMPACT SO GRID — one row per line, CAN/CTN/LBL aggregated from BOM ===== */
-  let sh='<thead><tr><th>SO ID</th><th>FG Code</th><th>Description</th><th>Req FG</th><th>Due</th>'+
-   '<th>Req Can</th><th>Avail Can</th><th>Req Ctn</th><th>Avail Ctn</th><th>Req Lbl</th><th>Avail Lbl</th>'+
-   '<th>Remark</th><th>Use FG</th><th>Action</th></tr></thead>';
-  rows.forEach((r,ri)=>{const l=r.l,dl=dLeft(l.date),bu=(db.boms[l.code]||{}).uom||'CTN',fgit=item(l.code);
-    const b=db.boms[l.code];
-    const can=b?aggCat(b.comps,r.eff,'Can'):{req:0,avl:0,names:[]};
-    const ctn=b?aggCat(b.comps,r.eff,'Carton'):{req:0,avl:0,names:[]};
-    const lbl=b?aggCat(b.comps,r.eff,'Label'):{req:0,avl:0,names:[]};
-    /* remark: shortage or surplus after this order */
-    const shp=[];
-    if(can.req>can.avl)shp.push('CAN −'+f(can.req-can.avl));
-    if(ctn.req>ctn.avl)shp.push('CTN −'+f(ctn.req-ctn.avl));
-    if(lbl.req>lbl.avl)shp.push('LBL −'+f(lbl.req-lbl.avl));
-    r.comps.forEach(c=>{const it=item(c.itemCode);
-      if(it&&['Cap','Bucket','Drum','Other'].includes(it.cat)&&c.short>0)shp.push(esc(it.cat).toUpperCase()+' −'+f(c.short));});
-    const surplus=[];
-    if(can.avl>can.req)surplus.push('CAN +'+f(can.avl-can.req));
-    if(ctn.avl>ctn.req)surplus.push('CTN +'+f(ctn.avl-ctn.req));
-    if(lbl.avl>lbl.req)surplus.push('LBL +'+f(lbl.avl-lbl.req));
-    const remark=r.noBom?'<span class="badge b-gry">NO BOM</span>'
-      :shp.length?'<b class="red">⚠ SHORTAGE: '+shp.join(' · ')+'</b><br><small class="note">→ ORDER NOW</small>'
-      :'<b style="color:var(--green)">✅ OK</b>'+(surplus.length?' <small class="note">surplus: '+surplus.join(' · ')+' after this order</small>':'');
-    sh+='<tr'+(shp.length?' class="rowRed"':'')+'>'+
-      '<td data-l="SO ID"><b>'+esc(l.soId)+'</b></td>'+
-      '<td data-l="FG Code">'+esc(l.code)+'</td>'+
-      '<td data-l="Description">'+esc((b||{}).name||l.name||'')+'</td>'+
-      '<td data-l="Req FG" class="num"><b>'+f(l.qty)+'</b> '+esc(bu)+(r.fu>0?'<br><small class="note" style="color:var(--blue)">'+f(r.fu)+' FG + '+f(r.eff)+' prod</small>':'')+'</td>'+
-      '<td data-l="Due">'+l.date+(dl<0?' '+badge('b-red','LATE '+(-dl)+'d'):dl<=3?' '+badge('b-amb',dl+'d'):'')+'</td>'+
-      '<td data-l="Req Can" class="num" title="'+esc((can.names||[]).join(' | '))+'">'+f(can.req)+'</td>'+
-      '<td data-l="Avail Can" class="num '+(can.req>can.avl?'red':'')+'" title="'+esc((can.names||[]).join(' | '))+'"><b>'+f(can.avl)+'</b></td>'+
-      '<td data-l="Req Ctn" class="num">'+f(ctn.req)+'</td>'+
-      '<td data-l="Avail Ctn" class="num '+(ctn.req>ctn.avl?'red':'')+'"><b>'+f(ctn.avl)+'</b></td>'+
-      '<td data-l="Req Lbl" class="num">'+f(lbl.req)+'</td>'+
-      '<td data-l="Avail Lbl" class="num '+(lbl.req>lbl.avl?'red':'')+'"><b>'+f(lbl.avl)+'</b></td>'+
-      '<td data-l="Remark">'+remark+'</td>'+
-      '<td data-l="Use FG">'+(fgit?'<input id="fgi'+ri+'" type="number" min="0" max="'+l.qty+'" step="any" value="'+(r.fu||0)+'" style="width:60px" title="FG ready stock: '+f(fgit.onHand)+'">'+
-        '<button onclick="setFG('+ri+')">✔</button>':'-')+'</td>'+
-      '<td class="act" data-l="Action">'+
-      '<button onclick="toggleSo(\''+esc(l.key)+'\')" title="full component detail">🔍</button>'+
-      '<button class="ok" onclick="completeSO(\''+esc(l.key)+'\')">✅</button>'+
-      '<button class="danger" onclick="delSO(\''+esc(l.key)+'\')">✖</button></td></tr>';
-    if(expandedSo===l.key){
-      sh+='<tr class="sub"><td colspan="14"><b>Full component detail — '+esc(l.soId)+' / '+esc(l.code)+' (producing '+f(r.eff)+' '+esc(bu)+'):</b><br>'+
-        (r.comps.length?r.comps.map(c=>esc(c.itemCode)+' · '+esc(c.name)+' → Req <b>'+f(c.req)+'</b> · Have <b>'+f(c.got)+'</b> '+esc(c.unit)+
-          (c.short>0?' <b class="red">⚠ SHORT '+f(c.short)+'</b>':' ✓')).join('<br>')
-        :'— (all delivered from ready FG)')+'</td></tr>';}
-  });
-  $('soTbl').innerHTML=sh||'<tr><td colspan="14">No open orders — upload Sales Order Excel</td></tr>';
+/* ===== COMPACT SO GRID ===== */
+let sh='<thead><tr><th>SO ID</th><th>FG Code</th><th>Description</th><th>Req FG</th><th>Due</th>'+
+'<th>Req Can</th><th>Avail Can</th><th>Req Ctn</th><th>Avail Ctn</th><th>Req Lbl</th><th>Avail Lbl</th>'+
+'<th>Remark</th><th>Use FG</th><th>Action</th></tr></thead>';
+rows.forEach((r,ri)=>{const l=r.l,dl=dLeft(l.date),bu=(db.boms[l.code]||{}).uom||'CTN',fgit=item(l.code);
+const b=db.boms[l.code];
+const can=b?aggCat(b.comps,r.eff,'Can'):{req:0,avl:0,names:[]};
+const ctn=b?aggCat(b.comps,r.eff,'Carton'):{req:0,avl:0,names:[]};
+const lbl=b?aggCat(b.comps,r.eff,'Label'):{req:0,avl:0,names:[]};
+const shp=[];
+if(can.req>can.avl)shp.push('CAN −'+f(can.req-can.avl));
+if(ctn.req>ctn.avl)shp.push('CTN −'+f(ctn.req-ctn.avl));
+if(lbl.req>lbl.avl)shp.push('LBL −'+f(lbl.req-lbl.avl));
+r.comps.forEach(c=>{const it=item(c.itemCode);
+if(it&&['Cap','Bucket','Drum','Other'].includes(it.cat)&&c.short>0)shp.push(esc(it.cat).toUpperCase()+' −'+f(c.short));});
+const surplus=[];
+if(can.avl>can.req)surplus.push('CAN +'+f(can.avl-can.req));
+if(ctn.avl>ctn.req)surplus.push('CTN +'+f(ctn.avl-ctn.req));
+if(lbl.avl>lbl.req)surplus.push('LBL +'+f(lbl.avl-lbl.req));
+const remark=r.noBom?'<span class="badge b-gry">NO BOM</span>'
+:shp.length?'<b class="red">⚠ SHORTAGE: '+shp.join(' · ')+'</b>
+<small class="note">→ ORDER NOW</small>'
+:'<b style="color:var(--green)">✅ OK</b>'+(surplus.length?' <small class="note">surplus: '+surplus.join(' · ')+'</small>':'');
+sh+='<tr'+(shp.length?' class="rowRed"':'')+'>'+
+'<td data-l="SO ID"><b>'+esc(l.soId)+'</b></td>'+
+'<td data-l="FG Code">'+esc(l.code)+'</td>'+
+'<td data-l="Description">'+esc((b||{}).name||l.name||'')+'</td>'+
+'<td data-l="Req FG" class="num"><b>'+f(l.qty)+'</b> '+esc(bu)+(r.fu>0?'
+<small class="note" style="color:var(--blue)">'+f(r.fu)+' FG + '+f(r.eff)+' prod</small>':'')+'</td>'+
+'<td data-l="Due">'+l.date+(dl<0?' '+badge('b-red','LATE '+(-dl)+'d'):dl<=3?' '+badge('b-amb',dl+'d'):'')+'</td>'+
+'<td data-l="Req Can" class="num" title="'+esc((can.names||[]).join(' | '))+'">'+f(can.req)+'</td>'+
+'<td data-l="Avail Can" class="num '+(can.req>can.avl?'red':'')+'" title="'+esc((can.names||[]).join(' | '))+'"><b>'+f(can.avl)+'</b></td>'+
+'<td data-l="Req Ctn" class="num">'+f(ctn.req)+'</td>'+
+'<td data-l="Avail Ctn" class="num '+(ctn.req>ctn.avl?'red':'')+'"><b>'+f(ctn.avl)+'</b></td>'+
+'<td data-l="Req Lbl" class="num">'+f(lbl.req)+'</td>'+
+'<td data-l="Avail Lbl" class="num '+(lbl.req>lbl.avl?'red':'')+'"><b>'+f(lbl.avl)+'</b></td>'+
+'<td data-l="Remark">'+remark+'</td>'+
+'<td data-l="Use FG">'+(fgit?'<input id="fgi'+ri+'" type="number" min="0" max="'+l.qty+'" step="any" value="'+(r.fu||0)+'" style="width:60px" title="FG ready stock: '+f(fgit.onHand)+'">'+
+'<button onclick="setFG('+ri+')">✔</button>':'-')+'</td>'+
+'<td class="act" data-l="Action">'+
+'<button onclick="toggleSo(\''+esc(l.key)+'\')" title="full component detail">🔍</button>'+
+'<button class="ok" onclick="completeSO(\''+esc(l.key)+'\')">✅</button>'+
+'<button class="danger" onclick="delSO(\''+esc(l.key)+'\')">✖</button></td></tr>';
+if(expandedSo===l.key){
+sh+='<tr class="sub"><td colspan="14"><b>Full detail — '+esc(l.soId)+' / '+esc(l.code)+' (producing '+f(r.eff)+' '+esc(bu)+'):</b>
+'+
+(r.comps.length?r.comps.map(c=>esc(c.itemCode)+' · '+esc(c.name)+' → Req <b>'+f(c.req)+'</b> · Have <b>'+f(c.got)+'</b> '+esc(c.unit)+
+(c.short>0?' <b class="red">⚠ SHORT '+f(c.short)+'</b>':' ✓')).join('
+')
+:'— (all from ready FG)')+'</td></tr>';}
+});
+$('soTbl').innerHTML=sh||'<tr><td colspan="14">No open orders — upload Sales Order Excel</td></tr>';
 
-  let ph='<thead><tr><th>PO</th><th>Supplier</th><th>Item</th><th>Qty</th><th>Expected (click to edit)</th><th>Status</th><th>Action</th></tr></thead>';
-  db.pos.forEach(p=>{const it=item(p.itemCode),dl=dLeft(p.exp);
-    const stat=p.status==='open'?(dl<0?badge('b-red','OVERDUE '+(-dl)+'d'):dl<=3?badge('b-amb','due '+dl+'d'):badge('b-gry',dl+'d left'))
-      :p.status==='ready'?badge('b-blu','🏭 READY WITH SUPPLIER'):badge('b-gry','received ✔');
-    ph+='<tr'+((p.status!=='recd'&&dl<0)?' class="rowRed"':'')+'><td data-l="PO"><b>'+p.id+'</b></td>'+
-      '<td data-l="Supplier">'+esc(p.sup)+'</td>'+
-      '<td data-l="Item">'+esc(p.itemCode)+' · '+(it?esc(it.name):'?')+'</td>'+
-      '<td data-l="Qty" class="num">'+f(p.qty)+'</td>'+
-      '<td data-l="Expected"><span contenteditable onblur="editPODate(\''+p.id+'\',this.textContent.trim())">'+p.exp+'</span></td>'+
-      '<td data-l="Status">'+stat+'</td>'+
-      '<td class="act" data-l="Action">'+
-      (p.status==='open'
-        ?'<button class="blu" onclick="poReady(\''+p.id+'\')">🏭 Ready</button>'+
-         '<button class="ok" onclick="receivePO(\''+p.id+'\')">📥 Received</button>'+
-         '<button class="danger" onclick="cancelPO(\''+p.id+'\')">✖</button>'
-        :p.status==='ready'
-        ?'<button class="ok" onclick="receivePO(\''+p.id+'\')">📥 Received</button>'+
-         '<button onclick="poReopen(\''+p.id+'\')">↩ Ordered</button>'+
-         '<button class="danger" onclick="cancelPO(\''+p.id+'\')">✖</button>'
-        :'')+'</td></tr>';});
-  $('poTbl').innerHTML=ph||'<tr><td colspan="7">No POs yet</td></tr>';
+let ph='<thead><tr><th>PO</th><th>Supplier</th><th>Item</th><th>Qty</th><th>Expected (click to edit)</th><th>Status</th><th>Action</th></tr></thead>';
+db.pos.forEach(p=>{const it=item(p.itemCode),dl=dLeft(p.exp);
+const stat=p.status==='open'?(dl<0?badge('b-red','OVERDUE '+(-dl)+'d'):dl<=3?badge('b-amb','due '+dl+'d'):badge('b-gry',dl+'d left'))
+:p.status==='ready'?badge('b-blu','🏭 READY WITH SUPPLIER'):badge('b-gry','received ✔');
+ph+='<tr'+((p.status!=='recd'&&dl<0)?' class="rowRed"':'')+'><td data-l="PO"><b>'+p.id+'</b></td>'+
+'<td data-l="Supplier">'+esc(p.sup)+'</td>'+
+'<td data-l="Item">'+esc(p.itemCode)+' · '+(it?esc(it.name):'?')+'</td>'+
+'<td data-l="Qty" class="num">'+f(p.qty)+'</td>'+
+'<td data-l="Expected"><span contenteditable onblur="editPODate(\''+p.id+'\',this.textContent.trim())">'+p.exp+'</span></td>'+
+'<td data-l="Status">'+stat+'</td>'+
+'<td class="act" data-l="Action">'+
+(p.status==='open'
+?'<button class="blu" onclick="poReady(\''+p.id+'\')">🏭 Ready</button>'+
+'<button class="ok" onclick="receivePO(\''+p.id+'\')">📥 Received</button>'+
+'<button class="danger" onclick="cancelPO(\''+p.id+'\')">✖</button>'
+:p.status==='ready'
+?'<button class="ok" onclick="receivePO(\''+p.id+'\')">📥 Received</button>'+
+'<button onclick="poReopen(\''+p.id+'\')">↩ Ordered</button>'+
+'<button class="danger" onclick="cancelPO(\''+p.id+'\')">✖</button>'
+:'')+'</td></tr>';});
+$('poTbl').innerHTML=ph||'<tr><td colspan="7">No POs yet</td></tr>';
 
-  $('doneTbl').innerHTML='<thead><tr><th>SO ID</th><th>FG Code</th><th>Qty</th><th>From FG</th><th>Date</th></tr></thead>'+
-    (db.sos.filter(s=>s.status==='done').sort((a,b)=>b.doneTs-a.doneTs)
-     .map(s=>'<tr><td data-l="SO ID">'+esc(s.soId)+'</td><td data-l="FG Code">'+esc(s.code)+'</td>'+
-      '<td data-l="Qty" class="num">'+f(s.qty)+'</td><td data-l="From FG" class="num">'+f(s.fgUsed||0)+'</td>'+
-      '<td data-l="Date">'+new Date(s.doneTs).toLocaleDateString()+'</td></tr>').join('')
-     ||'<tr><td colspan="5">None yet</td></tr>');
-  $('logTbl').innerHTML='<thead><tr><th>When</th><th>Event</th></tr></thead>'+
-    db.log.slice(0,80).map(l=>'<tr><td data-l="When">'+new Date(l.ts).toLocaleString()+'</td><td data-l="Event">'+esc(l.txt)+'</td></tr>').join('');
+( 
+′
+ doneTbl 
+′
+ ).innerHTML= 
+′
+ <thead><tr><th>SOID</th><th>FGCode</th><th>Qty</th><th>FromFG</th><th>Date</th></tr></thead> 
+′
+ +(db.sos.filter(s=>s.status=== 
+′
+ done 
+′
+ ).sort((a,b)=>b.doneTs−a.doneTs).map(s=> 
+′
+ <tr><tddata−l="SOID"> 
+′
+ +esc(s.soId)+ 
+′
+ </td><tddata−l="FGCode"> 
+′
+ +esc(s.code)+ 
+′
+ </td> 
+′
+ + 
+′
+ <tddata−l="Qty"class="num"> 
+′
+ +f(s.qty)+ 
+′
+ </td><tddata−l="FromFG"class="num"> 
+′
+ +f(s.fgUsed∣∣0)+ 
+′
+ </td> 
+′
+ + 
+′
+ <tddata−l="Date"> 
+′
+ +newDate(s.doneTs).toLocaleDateString()+ 
+′
+ </td></tr> 
+′
+ ).join( 
+′′
+ )∣∣ 
+′
+ <tr><tdcolspan="5">Noneyet</td></tr> 
+′
+ );
+('logTbl').innerHTML='<thead><tr><th>When</th><th>Event</th></tr></thead>'+
+db.log.slice(0,80).map(l=>'<tr><td data-l="When">'+new Date(l.ts).toLocaleString()+'</td><td data-l="Event">'+esc(l.txt)+'</td></tr>').join('');
 
-  renderSups();refreshAlerts();}
-function quickPO(c){switchTab('po');$('poItemTxt').value=c;poPickCode=c;setTimeout(()=>$('poQty').focus(),80);}
+renderSups();refreshAlerts(C);}
+function quickPO(c){switchTab('po');
+( 
+′
+ poItemTxt 
+′
+ ).value=c;poPickCode=c;setTimeout(()=>
+('poQty').focus(),80);}
 
 /* ============ TABS / IO ============ */
 const tabs=[['dash','📊 Dashboard'],['imp','⬆ Excel Import'],['so','📝 Sales Orders'],['stock','📦 Stock & BOM'],['po','📤 Purchase Orders'],['rep','📑 Reports'],['hist','📜 History']];
- $('nav').innerHTML=tabs.map(t=>'<button data-t="'+t[0]+'" onclick="switchTab(\''+t[0]+'\')">'+t[1]+'</button>').join('');
-function switchTab(t){tabs.forEach(([k])=>$('tab-'+k).classList.toggle('hide',k!==t));
-  [...document.querySelectorAll('#nav button')].forEach(b=>b.classList.toggle('active',b.dataset.t===t));}
+('nav').innerHTML=tabs.map(t=>'<button data-t="'+t[0]+'" onclick="switchTab(\''+t[0]+'\')">'+t[1]+'</button>').join('');
+function switchTab(t){tabs.forEach(([k])=>
+('tab-'+k).classList.toggle('hide',k!==t));
+[...document.querySelectorAll('#nav button')].forEach(b=>b.classList.toggle('active',b.dataset.t===t));}
 function exportCSV(){const C=calc();
-  let c='Code,Item,Type,Unit,Actual,Committed,After Commitment,On Order,Ready at Supplier,Min\n';
-  db.items.forEach(i=>{const cm=committedFor(i,C);
-    c+='"'+i.code+'","'+i.name+'",'+i.cat+','+i.unit+','+i.onHand+','+cm+','+(i.onHand-cm)+','+(C.onOrder[i.code]||0)+','+(C.readyQ[i.code]||0)+','+i.min+'\n';});
-  dl('data:text/csv;charset=utf-8,'+encodeURIComponent(c),'packaging_stock_report.csv');}
+let c='Code,Item,Type,Unit,Actual,Committed,After Commitment,On Order,Ready at Supplier,Min\n';
+db.items.forEach(i=>{const cm=committedFor(i,C);
+c+='"'+i.code+'","'+i.name+'",'+i.cat+','+i.unit+','+i.onHand+','+cm+','+(i.onHand-cm)+','+(C.onOrder[i.code]||0)+','+(C.readyQ[i.code]||0)+','+i.min+'\n';});
+dl('data:text/csv;charset=utf-8,'+encodeURIComponent(c),'packaging_stock_report.csv');}
 function backup(){dl('data:text/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(db,null,1)),'packaging_backup_'+today()+'.json');}
 function restore(inp){const r=new FileReader();r.onload=e=>{try{const d=JSON.parse(e.target.result);
-  if(!d.items||!d.boms)throw 0;db=d;db.lineSeq=db.lineSeq||100;db.sups=db.sups||[];save();init();alert('✔ Restored');}catch{alert('Invalid file');}};r.readAsText(inp.files[0]);inp.value='';}
+if(!d.items||!d.boms)throw 0;db=d;db.lineSeq=db.lineSeq||100;db.sups=db.sups||[];reindex();save();init();alert('✔ Restored');}catch{alert('Invalid file');}};r.readAsText(inp.files[0]);inp.value='';}
 function dl(h,n){const a=document.createElement('a');a.href=h;a.download=n;a.click();}
 
-/* ============ DEMO ============ */
-function resetDemo(silent){if(!silent&&!confirm('Replace everything with DEMO data?'))return;
-  const T=Date.now(),D=n=>new Date(T+n*864e5).toISOString().slice(0,10);
-  db={lineSeq:100,manSeq:1,poSeq:1005,items:[],boms:{},sos:[],pos:[],
-    sups:[{name:'RAK Closures LLC',phone:'+971-50-0000001'},{name:'CanPack Industries',phone:'+971-50-0000002'},
-          {name:'PrintHub Labels',phone:'+971-50-0000003'},{name:'PailPro Plastics',phone:''}],
-    log:[{ts:T,txt:'🔄 Demo loaded'}]};
-  [['RM-SEAL36','INDUCTION SEAL VENOL 36 MM (1L) SILICON','Cap',4800,1000],
-   ['RM-CAN1L-G','EMPTY CAN (1L) VENOL FL GREEN PT 150643','Can',5200,1200],
-   ['RM-CTN12X1','EMPTY CTN VENOL (12X1L) UNIVERSAL EB 750 GM','Carton',400,100],
-   ['RM-LB-VMO-FU','LABELS VENOL 0W16 (1L) FU','Label',4200,1000],
-   ['RM-LB-VMO-FD','LABELS VENOL 0W16 (1L) FD','Label',3000,1000],
-   ['RM-LB-VMO-B','LABELS VENOL 0W16 (1L) BACK','Label',2600,1000],
-   ['RM-CAP61','CAP 61 MM (5L)','Cap',25,300],
-   ['RM-CAN5L-BL','EMPTY CAN (5L) VENOL BLUE','Can',350,120],
-   ['RM-CTN4X5','EMPTY CTN (4X5L)','Carton',90,40],
-   ['RM-LB-5L-FA','LABEL FRONT-A VENOL 20W50 5L','Label',380,100],
-   ['RM-LB-5L-FB','LABEL FRONT-B VENOL 20W50 5L','Label',360,100],
-   ['RM-LB-5L-BK','LABEL BACK VENOL 20W50 5L','Label',350,100],
-   ['RM-CAP38','CAP 38 MM (4L)','Cap',640,200],
-   ['RM-CAN4L-BG','EMPTY CAN (4L) BIOGREEN','Can',500,150],
-   ['RM-CTN4X4','EMPTY CTN (4X4L)','Carton',120,40],
-   ['RM-LB-V8-4L','LABEL V8 5W20 4L FRONT','Label',480,120],
-   ['RM-JAR500','GREASE JAR 500 GM GOLD PLASTIC','Can',2600,500],
-   ['RM-LID500','LID 500 GM JAR','Cap',3000,500],
-   ['RM-LB-EP2-F','LABEL EP2 500 GM FRONT','Label',2400,600],
-   ['RM-LB-EP2-B','LABEL EP2 500 GM BACK','Label',2200,600],
-   ['RM-BOX12X500','BOX (12X500 GM)','Carton',260,60],
-   ['RM-PAIL20','PAIL 20 L WHITE','Bucket',340,80],
-   ['RM-LID20','LID 20 L','Cap',320,80],
-   ['RM-DRUM208','DRUM 208 L STEEL','Drum',95,25],
-   ['FG-0521','VENOL M/O 20W50 API SN (4X5L) — READY FG','Product',6,0],
-   ['FG-0213','VENOL M/O 0W16 (12X1L) — READY FG','Product',3,0],
-   ['FG-0658','V8 M/O 5W20 (4X4L) — READY FG','Product',0,0],
-   ['FG-1371','EURO GULF GREASE MP3 (12X500G) — READY FG','Product',0,0]
-  ].forEach(a=>db.items.push({code:a[0],name:a[1],cat:a[2],unit:a[0].startsWith('FG')?'CTN':'pc',onHand:a[3],min:a[4]}));
-  db.boms['FG-0213']={name:'VENOL M/O 0W16 API SP (RC) C5 GF/6B (12X1L)',uom:'CTN',comps:[
-    {itemCode:'RM-SEAL36',qty:12,uom:'PCS'},{itemCode:'RM-CAN1L-G',qty:12,uom:'PCS'},
-    {itemCode:'RM-CTN12X1',qty:1,uom:'PCS'},{itemCode:'RM-LB-VMO-FU',qty:12,uom:'PCS'},
-    {itemCode:'RM-LB-VMO-FD',qty:12,uom:'PCS'},{itemCode:'RM-LB-VMO-B',qty:12,uom:'PCS'},
-    {itemCode:'RM-LIQ-0W16',qty:12,uom:'LITER',excl:true}]};
-  db.boms['FG-0521']={name:'VENOL M/O 20W50 API SN (4X5L)',uom:'CTN',comps:[
-    {itemCode:'RM-CAP61',qty:4,uom:'PCS'},{itemCode:'RM-CAN5L-BL',qty:4,uom:'PCS'},
-    {itemCode:'RM-CTN4X5',qty:1,uom:'PCS'},{itemCode:'RM-LB-5L-FA',qty:4,uom:'PCS'},
-    {itemCode:'RM-LB-5L-FB',qty:4,uom:'PCS'},{itemCode:'RM-LB-5L-BK',qty:4,uom:'PCS'},
-    {itemCode:'RM-LIQ-20W50',qty:20,uom:'LITER',excl:true}]};
-  db.boms['FG-0658']={name:'V8 M/O 5W20 API SP ILSAC GF 6 (4X4L) BIOGREEN',uom:'CTN',comps:[
-    {itemCode:'RM-CAP38',qty:4,uom:'PCS'},{itemCode:'RM-CAN4L-BG',qty:4,uom:'PCS'},
-    {itemCode:'RM-CTN4X4',qty:1,uom:'PCS'},{itemCode:'RM-LB-V8-4L',qty:4,uom:'PCS'},
-    {itemCode:'RM-LIQ-V8',qty:16,uom:'LITER',excl:true}]};
-  db.boms['FG-1371']={name:'EURO GULF GREASE CALCIUM MP3/EP3 (12X500GM) PLASTIC GOLD',uom:'CTN',comps:[
-    {itemCode:'RM-JAR500',qty:12,uom:'PCS'},{itemCode:'RM-LID500',qty:12,uom:'PCS'},
-    {itemCode:'RM-LB-EP2-F',qty:12,uom:'PCS'},{itemCode:'RM-LB-EP2-B',qty:12,uom:'PCS'},
-    {itemCode:'RM-BOX12X500',qty:1,uom:'PCS'},{itemCode:'RM-SEM-GREASE',qty:6,uom:'KG',excl:true}]};
-  db.sos=[
-   {key:'GE-SO-2026-0935~FG-0521~101',soId:'GE-SO-2026-0935',code:'FG-0521',date:D(2),qty:10,fgUsed:6,ts:T-3e8,status:'open'},
-   {key:'GE-SO-2026-0935~FG-0213~102',soId:'GE-SO-2026-0935',code:'FG-0213',date:D(2),qty:5,ts:T-3e8,status:'open'},
-   {key:'GE-SO-2026-0942~FG-0658~103',soId:'GE-SO-2026-0942',code:'FG-0658',date:D(6),qty:8,ts:T-2e8,status:'open'},
-   {key:'GE-SO-2026-0942~FG-1371~104',soId:'GE-SO-2026-0942',code:'FG-1371',date:D(6),qty:15,ts:T-2e8,status:'open'}];
-  db.pos=[
-   {id:'PO-1001',sup:'RAK Closures LLC',itemCode:'RM-CAP61',qty:500,exp:D(-2),status:'open'},
-   {id:'PO-1002',sup:'CanPack Industries',itemCode:'RM-CAN1L-G',qty:2880,exp:D(5),status:'open'},
-   {id:'PO-1003',sup:'PrintHub Labels',itemCode:'RM-LB-VMO-FU',qty:2000,exp:D(9),status:'open'},
-   {id:'PO-1004',sup:'PailPro Plastics',itemCode:'RM-PAIL20',qty:200,exp:D(1),status:'ready'}];
-  db.items.push({code:'RM-LIQ-0W16',name:'VENOL LIQ M/O 0W16 API SP',cat:'Other',unit:'LITER',onHand:0,min:0},
-    {code:'RM-LIQ-20W50',name:'VENOL LIQ M/O 20W50 API SN',cat:'Other',unit:'LITER',onHand:0,min:0},
-    {code:'RM-LIQ-V8',name:'V8 LIQ M/O 5W20 API SP',cat:'Other',unit:'LITER',onHand:0,min:0},
-    {code:'RM-SEM-GREASE',name:'GREASE CALCIUM MP3/EP3 SEMI',cat:'Other',unit:'KG',onHand:0,min:0});
-  save();if(!silent)init();}
-function init(){fillSelects();initCombos();renderRepBtns();renderBOM();switchTab('dash');render();}
-function fillSelects(){
-  const fgs=Object.keys(db.boms);
-  const cur=$('bomProdTxt').dataset.code;
-  if(cur&&fgs.includes(cur)){$('bomProdTxt').value=cur;}}
+function init(){reindex();initCombos();renderRepBtns();renderBOM();switchTab('dash');render();}
+
+/* stock search events */
+( 
+′
+ stockQ 
+′
+ ).addEventListener( 
+′
+ input 
+′
+ ,()=>clearTimeout(stockT);stockT=setTimeout(()=>stockPage=0;renderStock(lastC);,120););
+('stockCat').addEventListener('change',()=>{stockPage=0;renderStock(lastC);});
+
 function boot(){
-  $('poExp').min=today();
-  try{
-    firebase.initializeApp(FB_CONFIG);
-    rtdb=firebase.database().ref('packagingApp');
-    rtdb.once('value').then(s=>{
-      const v=s.val();
-      if(v&&v.items&&v.items.length)db=v;
-      else rtdb.set(db);
-      db.lineSeq=db.lineSeq||100;db.manSeq=db.manSeq||1;db.poSeq=db.poSeq||1001;db.sups=db.sups||[];
-      cloudReady=true;
-      $('cloudState').innerHTML='☁️ Live — packaging-planner';
-      save();init();
-      rtdb.on('value',s2=>{
-        if(mute||!s2)return;const v2=s2.val();
-        if(!v2||!v2.items)return;
-        db=v2;db.lineSeq=db.lineSeq||100;db.manSeq=db.manSeq||1;db.poSeq=db.poSeq||1001;db.sups=db.sups||[];
-        fillSelects();renderBOM();render();
-      });
-    }).catch(err=>{$('cloudState').innerHTML='⚠️ Cloud error — check DB rules';console.error(err);init();});
-  }catch(err){$('cloudState').innerHTML='⚠️ Cloud error — Local mode';console.error(err);init();}
+('poExp').min=today();
+try{
+firebase.initializeApp(FB_CONFIG);
+rtdb=firebase.database().ref('packagingApp');
+rtdb.once('value').then(s=>{
+const v=s.val();
+if(v&&v.items&&v.items.length)db=v;
+else rtdb.set(db);
+db.lineSeq=db.lineSeq||100;db.manSeq=db.manSeq||1;db.poSeq=db.poSeq||1001;db.sups=db.sups||[];
+reindex();
+cloudReady=true;
+('cloudState').innerHTML='☁️ Live — '+db.items.length+' items';
+save();init();
+rtdb.on('value',s2=>{
+if(mute||!s2)return;const v2=s2.val();
+if(!v2||!v2.items)return;
+db=v2;db.lineSeq=db.lineSeq||100;db.manSeq=db.manSeq||1;db.poSeq=db.poSeq||1001;db.sups=db.sups||[];
+reindex();fillSelects2();renderBOM();render();
+});
+}).catch(err=>{
+('cloudState').innerHTML='⚠️ Cloud error — check DB rules';console.error(err);init();});
+}catch(err){
+('cloudState').innerHTML='⚠️ Cloud error — Local mode';console.error(err);init();}
 }
+function fillSelects2(){
+const cur=
+('bomProdTxt').dataset.code;
+if(cur&&db.boms[cur])
+('bomProdTxt').value=cur;}
 boot();
 </script>
+
 </body>
 </html>
