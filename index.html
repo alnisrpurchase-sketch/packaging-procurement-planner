@@ -149,7 +149,7 @@ body.compact{--tdpad:3px;--tblfs:12px}
     <button onclick="backup()">💾 Backup</button>
     <button onclick="$('impFile2').click()">📂 Restore</button>
     <input type="file" id="impFile2" accept=".json" class="hide" onchange="restore(this)">
-    <button class="danger" onclick="cleanDemo()">🧹 Remove Demo Data</button>
+    <button class="danger" onclick="deleteAllData()">🗑️ Delete All Data</button>
   </div><br>
   <h2 class="sec">📦 Stock — search & filter</h2>
   <div class="searchBar">
@@ -387,6 +387,37 @@ function bomPickFgSel(){return $('bomProdTxt').dataset.code||'';}
 
 /* ============ DEMO CLEANUP ============ */
 var DEMO_CODES=['RM-SEAL36','RM-CAN1L-G','RM-CTN12X1','RM-LB-VMO-FU','RM-LB-VMO-FD','RM-LB-VMO-B','RM-CAP61','RM-CAN5L-BL','RM-CTN4X5','RM-LB-5L-FA','RM-LB-5L-FB','RM-LB-5L-BK','RM-CAP38','RM-CAN4L-BG','RM-CTN4X4','RM-LB-V8-4L','RM-JAR500','RM-LID500','RM-LB-EP2-F','RM-LB-EP2-B','RM-BOX12X500','RM-PAIL20','RM-LID20','RM-DRUM208','RM-LIQ-0W16','RM-LIQ-20W50','RM-LIQ-V8','RM-SEM-GREASE','FG-0521','FG-0213','FG-0658','FG-1371'];
+function deleteAllData(){
+  if(!confirm('⚠️ DELETE ALL DATA?\n\nThis will permanently remove ALL packaging planner data from Firebase and this browser, including uploaded items, BOMs, sales orders, purchase orders, suppliers, logs, and any demo data.\n\nThis cannot be undone.'))return;
+  try{
+    mute=true;
+    db=blankDB();
+    reindex();
+    try{localStorage.removeItem(KEY);}catch(e){}
+    if(rtdb){
+      rtdb.remove().then(function(){
+        mute=false;
+        try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){}
+        cloudReady=true;
+        render();
+        alert('✔ ALL DATA DELETED from Firebase and this browser.');
+      },function(err){
+        mute=false;
+        try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){}
+        render();
+        alert('⚠️ Local data cleared, but Firebase deletion failed: '+(err&&err.message||err));
+      });
+    }else{
+      mute=false;
+      try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){}
+      render();
+      alert('✔ ALL LOCAL DATA DELETED. Firebase was not connected.');
+    }
+  }catch(e){
+    mute=false;
+    showErr('Delete all data: '+e.message);
+  }
+}
 function cleanDemo(){
   if(!confirm('Remove built-in DEMO items, BOMs, orders, POs?\nYour uploaded items stay safe.'))return;
   var before=db.items.length;
