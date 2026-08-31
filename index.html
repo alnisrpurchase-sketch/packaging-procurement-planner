@@ -265,9 +265,18 @@ function log(t){db.log.unshift({ts:Date.now(),txt:t});if(db.log.length>300)db.lo
 function blankDB(){return{lineSeq:100,manSeq:1,poSeq:1001,items:[],boms:{},sos:[],pos:[],sups:[],log:[{ts:Date.now(),txt:'▶ Started'}]};}
 
 try{db=JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){db=null;}
-if(!db||!db.items||!db.items.length)db=blankDB();
+if(!db||typeof db!=='object')db=blankDB();
+function normalizeDB(){
+  db.items=Array.isArray(db.items)?db.items:[];
+  db.boms=(db.boms&&typeof db.boms==='object')?db.boms:{};
+  db.sos=Array.isArray(db.sos)?db.sos:[];
+  db.pos=Array.isArray(db.pos)?db.pos:[];
+  db.sups=Array.isArray(db.sups)?db.sups:[];
+  db.log=Array.isArray(db.log)?db.log:[];
+  db.lineSeq=db.lineSeq||100;db.manSeq=db.manSeq||1;db.poSeq=db.poSeq||1001;
+}
+normalizeDB();
 reindex();
-db.lineSeq=db.lineSeq||100;db.manSeq=db.manSeq||1;db.poSeq=db.poSeq||1001;db.sups=db.sups||[];
 
 var tblState={z:0,c:false};
 try{tblState=JSON.parse(localStorage.getItem('tblState')||'null')||tblState;}catch(e){}
@@ -869,13 +878,13 @@ function init(){
         var v=s.val();
         if(v&&v.items&&v.items.length)db=v;
         else rtdb.set(db);
-        db.lineSeq=db.lineSeq||100;db.manSeq=db.manSeq||1;db.poSeq=db.poSeq||1001;db.sups=db.sups||[];
+        normalizeDB();
         reindex();cloudReady=true;
         save();init();
         rtdb.on('value',function(s2){
           if(mute||!s2)return;var v2=s2.val();
           if(!v2||!v2.items)return;
-          db=v2;db.lineSeq=db.lineSeq||100;db.manSeq=db.manSeq||1;db.poSeq=db.poSeq||1001;db.sups=db.sups||[];
+          db=v2;normalizeDB();
           reindex();renderBOM();render();
         });
       },function(err){cloudDone=true;$('cloudState').innerHTML='⚠️ Cloud read failed — Local mode';
