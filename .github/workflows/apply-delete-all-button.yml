@@ -1,0 +1,43 @@
+name: Apply delete all button
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-delete-all-button.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          old='''    <button onclick="$('impFile2').click()">📂 Restore</button>\n    <input type="file" id="impFile2" accept=".json" class="hide" onchange="restore(this)">\n    <button class="danger" onclick="cleanDemo()">🧹 Remove Demo Data</button>'''
+          new='''    <button onclick="$('impFile2').click()">📂 Restore</button>\n    <input type="file" id="impFile2" accept=".json" class="hide" onchange="restore(this)">\n    <button class="danger" onclick="deleteAllData()">🗑️ Delete All Data</button>'''
+          if old not in s: raise SystemExit('toolbar block not found')
+          s=s.replace(old,new,1)
+          marker='''function cleanDemo(){\n'''
+          fn='''function deleteAllData(){\n  if(!confirm('⚠️ DELETE ALL DATA?\\n\\nThis will permanently remove ALL packaging planner data from Firebase and this browser, including uploaded items, BOMs, sales orders, purchase orders, suppliers, logs, and any demo data.\\n\\nThis cannot be undone.'))return;\n  try{\n    mute=true;\n    db=blankDB();\n    reindex();\n    try{localStorage.removeItem(KEY);}catch(e){}\n    if(rtdb){\n      rtdb.remove().then(function(){\n        mute=false;\n        try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){}\n        cloudReady=true;\n        render();\n        alert('✔ ALL DATA DELETED from Firebase and this browser.');\n      },function(err){\n        mute=false;\n        try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){}\n        render();\n        alert('⚠️ Local data cleared, but Firebase deletion failed: '+(err&&err.message||err));\n      });\n    }else{\n      mute=false;\n      try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){}\n      render();\n      alert('✔ ALL LOCAL DATA DELETED. Firebase was not connected.');\n    }\n  }catch(e){\n    mute=false;\n    showErr('Delete all data: '+e.message);\n  }\n}\nfunction cleanDemo(){\n'''
+          if marker not in s: raise SystemExit('cleanDemo marker not found')
+          s=s.replace(marker,fn,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Verify
+        run: |
+          grep -q 'deleteAllData()' index.html
+          grep -q 'function deleteAllData' index.html
+      - name: Commit index.html and remove workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git rm .github/workflows/apply-delete-all-button.yml
+          git commit -m 'Add delete all data button and remove demo button'
+          git push
